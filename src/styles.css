@@ -172,6 +172,214 @@ body {
   height: 100%;
 }
 
+/* ----------------------------------------------------------------- screens */
+
+.screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.screen.hidden {
+  display: none;
+}
+
+.splash {
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.dim {
+  color: var(--text-dim);
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ------------------------------------------------------------------- setup */
+
+.setup {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.setup-card {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 32px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.3);
+}
+
+.setup-logo {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, var(--accent) 0%, #4c1d95 100%);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -2px;
+}
+
+.setup-title {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+
+.setup-subtitle {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.step-marker {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+
+.steps li[data-state="active"] {
+  color: var(--text);
+}
+
+.steps li[data-state="active"] .step-marker {
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+.steps li[data-state="done"] {
+  color: var(--text);
+}
+
+.steps li[data-state="done"] .step-marker {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.steps li[data-state="done"] .step-marker::after {
+  content: "✓";
+}
+
+.steps li[data-state="error"] .step-marker {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.steps li[data-state="error"] .step-marker::after {
+  content: "!";
+}
+
+.setup-status {
+  margin: 0;
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.setup-status.error {
+  color: var(--danger);
+}
+
+.setup-log summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.setup-log pre {
+  margin: 8px 0 0;
+  max-height: 140px;
+  overflow: auto;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.setup-log.hidden {
+  display: none;
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ banner */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-raised));
+  border-bottom: 1px solid var(--border);
+}
+
+.banner.error {
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg-raised));
+}
+
+.banner.hidden {
+  display: none;
+}
+
+.banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ----------------------------------------------------------------- overlay */
 
 .overlay {
