@@ -1,0 +1,15 @@
+# Node / frontend
+node_modules/
+dist/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Editor & OS noise
+.DS_Store
+*.local
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json
