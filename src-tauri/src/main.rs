@@ -1,5 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod config;
+mod deps;
+mod kiro;
+mod path_env;
+mod proc;
 mod pty;
 
 fn main() {
@@ -11,7 +16,13 @@ fn main() {
             pty::pty_spawn,
             pty::pty_write,
             pty::pty_resize,
-            pty::pty_kill
+            pty::pty_kill,
+            kiro::locate_kiro,
+            kiro::check_auth,
+            kiro::install_kiro,
+            deps::check_system,
+            config::get_config,
+            config::set_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kiro Chat");

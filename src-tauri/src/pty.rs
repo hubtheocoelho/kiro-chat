@@ -150,11 +150,16 @@ pub fn pty_spawn(
     cols: u16,
     rows: u16,
 ) -> Result<u64, String> {
-    let mut spec = match mode.as_str() {
-        "shell" => default_shell(),
+    let spec = match mode.as_str() {
+        "chat" => crate::kiro::chat_spec(&app, cwd)?,
+        "login" => crate::kiro::login_spec(&app)?,
+        "shell" => {
+            let mut s = default_shell();
+            s.cwd = cwd;
+            s
+        }
         other => return Err(format!("unknown spawn mode: {other}")),
     };
-    spec.cwd = cwd.or(spec.cwd);
     spawn_session(&app, &state, spec, cols, rows)
 }
 
