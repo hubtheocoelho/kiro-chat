@@ -28,6 +28,39 @@ export const onPtyOutput = (cb: (p: PtyOutput) => void): Promise<UnlistenFn> =>
 export const onPtyExit = (cb: (p: PtyExit) => void): Promise<UnlistenFn> =>
   listen<PtyExit>("pty://exit", (e) => cb(e.payload));
 
+export interface KiroInfo {
+  path: string;
+  version: string | null;
+}
+
+export interface SystemReport {
+  os: string;
+  win11: boolean;
+  archOk: boolean;
+  online: boolean;
+}
+
+export interface AppConfig {
+  kiroPath: string | null;
+  theme: "dark" | "light" | null;
+  cwd: string | null;
+}
+
+export const checkSystem = () => invoke<SystemReport>("check_system");
+
+export const locateKiro = () => invoke<KiroInfo | null>("locate_kiro");
+
+export const installKiro = () => invoke<KiroInfo>("install_kiro");
+
+export const checkAuth = () => invoke<boolean>("check_auth");
+
+export const getConfig = () => invoke<AppConfig>("get_config");
+
+export const setConfig = (config: AppConfig) => invoke<void>("set_config", { config });
+
+export const onInstallProgress = (cb: (line: string) => void): Promise<UnlistenFn> =>
+  listen<{ line: string }>("install://progress", (e) => cb(e.payload.line));
+
 export function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
