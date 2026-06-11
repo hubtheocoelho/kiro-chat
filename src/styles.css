@@ -1,0 +1,78 @@
+:root {
+  --bg: #17141f;
+  --bg-raised: #211c2e;
+  --border: #36304a;
+  --text: #ece9f4;
+  --text-dim: #a79fc0;
+  --accent: #8b5cf6;
+  --accent-strong: #7c3aed;
+  --danger: #f87171;
+  --ok: #34d399;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, var(--accent) 0%, #4c1d95 100%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.placeholder {
+  margin: auto;
+  color: var(--text-dim);
+}
