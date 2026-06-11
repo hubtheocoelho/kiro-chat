@@ -12,6 +12,17 @@
   color-scheme: dark;
 }
 
+[data-theme="light"] {
+  --bg: #faf9fc;
+  --bg-raised: #ffffff;
+  --border: #e3dff0;
+  --text: #241f33;
+  --text-dim: #6f678a;
+  --danger: #dc2626;
+  --ok: #059669;
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -29,6 +40,8 @@ body {
   flex-direction: column;
   height: 100vh;
 }
+
+/* ------------------------------------------------------------------ topbar */
 
 .topbar {
   display: flex;
@@ -65,11 +78,130 @@ body {
   font-weight: 600;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.status-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.status-chip.ok {
+  color: var(--ok);
+}
+
+.status-chip.ok::before {
+  background: var(--ok);
+}
+
+/* ----------------------------------------------------------------- buttons */
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-icon {
+  padding: 6px 9px;
+}
+
+/* ----------------------------------------------------------------- content */
+
 .content {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 2px 8px 10px;
+  overflow: hidden;
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}
+
+/* ----------------------------------------------------------------- overlay */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 32px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
+}
+
+.overlay-card p {
+  margin: 0;
+  color: var(--text-dim);
 }
 
 .placeholder {
