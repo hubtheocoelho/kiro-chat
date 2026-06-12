@@ -236,6 +236,7 @@ mod tests {
         let mut child = pair.slave.spawn_command(cmd).unwrap();
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().unwrap();
+        let mut writer = pair.master.take_writer().unwrap();
 
         // ConPTY readers do not reliably observe EOF even after the child
         // exits and the master is dropped, so never block the test on it:
@@ -257,11 +258,20 @@ mod tests {
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         let mut out = String::new();
+        let mut dsr_answered = false;
         while !out.contains("kiro-pty-ok") && std::time::Instant::now() < deadline {
             match rx.recv_timeout(std::time::Duration::from_millis(500)) {
                 Ok(chunk) => out.push_str(&String::from_utf8_lossy(&chunk)),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+            // ConPTY asks the terminal where the cursor is (DSR, ESC[6n) and
+            // stalls all output until something answers, as xterm.js does in
+            // the real app. Play the terminal's part here.
+            if !dsr_answered && out.contains("\u{1b}[6n") {
+                let _ = writer.write_all(b"\x1b[1;1R");
+                let _ = writer.flush();
+                dsr_answered = true;
             }
         }
         let _ = child.kill();
