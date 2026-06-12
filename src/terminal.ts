@@ -78,7 +78,7 @@ export class TerminalView {
   async spawn(mode: SpawnMode, cwd: string | null = null): Promise<void> {
     await this.ready;
     this.futureOutput = [];
-    this.futureExit = null;
+    this.takePendingExit();
     this.term.reset();
     this.fit.fit();
     const generation = await ptySpawn(mode, cwd, this.term.cols, this.term.rows);
@@ -87,11 +87,16 @@ export class TerminalView {
     this.futureOutput = [];
     for (const p of replay) this.term.write(b64ToBytes(p.data));
     this.term.focus();
-    const pendingExit: PtyExit | null = this.futureExit;
-    this.futureExit = null;
+    const pendingExit = this.takePendingExit();
     if (pendingExit?.gen === generation) {
       this.onExit(pendingExit.code);
     }
+  }
+
+  private takePendingExit(): PtyExit | null {
+    const exit = this.futureExit;
+    this.futureExit = null;
+    return exit;
   }
 
   setTheme(name: ThemeName): void {
