@@ -12,6 +12,8 @@ import {
   ptyResize,
   ptySpawn,
   ptyWrite,
+  type PtyExit,
+  type PtyOutput,
   type SpawnMode,
 } from "./ipc";
 import { xtermThemes, type ThemeName } from "./theme";
@@ -23,6 +25,12 @@ export class TerminalView {
   private fit = new FitAddon();
   private generation = 0;
   private resizeTimer: number | undefined;
+  private ready: Promise<void>;
+  // Events of a session newer than `generation` can land before ptySpawn's
+  // response assigns it (IPC events and invoke replies are not ordered), so
+  // they are buffered and replayed right after the assignment.
+  private futureOutput: PtyOutput[] = [];
+  private futureExit: PtyExit | null = null;
 
   constructor(container: HTMLElement) {
     this.term = new Terminal({
@@ -49,19 +57,41 @@ export class TerminalView {
     });
     new ResizeObserver(() => this.scheduleResize()).observe(container);
 
-    void onPtyOutput((p) => {
-      if (p.gen === this.generation) this.term.write(b64ToBytes(p.data));
-    });
-    void onPtyExit((p) => {
-      if (p.gen === this.generation) this.onExit(p.code);
-    });
+    this.ready = Promise.all([
+      onPtyOutput((p) => {
+        if (p.gen === this.generation) {
+          this.term.write(b64ToBytes(p.data));
+        } else if (p.gen > this.generation) {
+          this.futureOutput.push(p);
+        }
+      }),
+      onPtyExit((p) => {
+        if (p.gen === this.generation) {
+          this.onExit(p.code);
+        } else if (p.gen > this.generation) {
+          this.futureExit = p;
+        }
+      }),
+    ]).then(() => {});
   }
 
   async spawn(mode: SpawnMode, cwd: string | null = null): Promise<void> {
+    await this.ready;
+    this.futureOutput = [];
+    this.futureExit = null;
     this.term.reset();
     this.fit.fit();
-    this.generation = await ptySpawn(mode, cwd, this.term.cols, this.term.rows);
+    const generation = await ptySpawn(mode, cwd, this.term.cols, this.term.rows);
+    this.generation = generation;
+    const replay = this.futureOutput.filter((p) => p.gen === generation);
+    this.futureOutput = [];
+    for (const p of replay) this.term.write(b64ToBytes(p.data));
     this.term.focus();
+    const pendingExit: PtyExit | null = this.futureExit;
+    this.futureExit = null;
+    if (pendingExit?.gen === generation) {
+      this.onExit(pendingExit.code);
+    }
   }
 
   setTheme(name: ThemeName): void {

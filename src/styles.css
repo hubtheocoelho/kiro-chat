@@ -411,8 +411,3 @@ body {
   margin: 0;
   color: var(--text-dim);
 }
-
-.placeholder {
-  margin: auto;
-  color: var(--text-dim);
-}

@@ -2,15 +2,10 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { t } from "./i18n";
 import { checkSystem, installKiro, onInstallProgress, type KiroInfo } from "./ipc";
+import { actionButtons, type ActionSpec } from "./ui";
 
 type StepId = "system" | "install" | "login";
 type StepState = "pending" | "active" | "done" | "error";
-
-interface ActionButton {
-  label: string;
-  primary?: boolean;
-  onClick: (btn: HTMLButtonElement) => void;
-}
 
 const MANUAL_INSTALL_COMMAND = "irm 'https://cli.kiro.dev/install.ps1' | iex";
 
@@ -47,17 +42,9 @@ export class SetupWizard {
     el.classList.toggle("error", kind === "error");
   }
 
-  private actions(buttons: ActionButton[]): void {
+  private actions(buttons: ActionSpec[]): void {
     const host = this.root.querySelector<HTMLElement>(".setup-actions")!;
-    host.replaceChildren(
-      ...buttons.map((spec) => {
-        const btn = document.createElement("button");
-        btn.className = spec.primary ? "btn btn-primary" : "btn";
-        btn.textContent = spec.label;
-        btn.addEventListener("click", () => spec.onClick(btn));
-        return btn;
-      })
-    );
+    host.replaceChildren(...actionButtons(buttons));
   }
 
   private appendLog(line: string): void {

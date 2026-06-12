@@ -20,8 +20,6 @@ export const ptyWrite = (data: string) => invoke<void>("pty_write", { data });
 
 export const ptyResize = (cols: number, rows: number) => invoke<void>("pty_resize", { cols, rows });
 
-export const ptyKill = () => invoke<void>("pty_kill");
-
 export const onPtyOutput = (cb: (p: PtyOutput) => void): Promise<UnlistenFn> =>
   listen<PtyOutput>("pty://output", (e) => cb(e.payload));
 

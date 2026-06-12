@@ -6,6 +6,7 @@ import { fmt, t } from "./i18n";
 import { checkAuth, checkSystem, getConfig, locateKiro, setConfig, type AppConfig } from "./ipc";
 import { TerminalView } from "./terminal";
 import { applyCssTheme, type ThemeName } from "./theme";
+import { actionButtons, type ActionSpec } from "./ui";
 import { SetupWizard } from "./wizard";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -98,11 +99,7 @@ function setStatus(connected: boolean): void {
   chip.textContent = connected ? t.statusConnected : t.statusDisconnected;
 }
 
-interface BannerAction {
-  label: string;
-  primary?: boolean;
-  onClick: () => void;
-}
+type BannerAction = ActionSpec;
 
 function setBanner(text: string | null, kind: "info" | "error" = "info", actions: BannerAction[] = []): void {
   const banner = byId("banner");
@@ -113,15 +110,7 @@ function setBanner(text: string | null, kind: "info" | "error" = "info", actions
   banner.classList.remove("hidden");
   banner.classList.toggle("error", kind === "error");
   byId("banner-text").textContent = text;
-  byId("banner-actions").replaceChildren(
-    ...actions.map((spec) => {
-      const btn = document.createElement("button");
-      btn.className = spec.primary ? "btn btn-primary" : "btn";
-      btn.textContent = spec.label;
-      btn.addEventListener("click", spec.onClick);
-      return btn;
-    })
-  );
+  byId("banner-actions").replaceChildren(...actionButtons(actions));
 }
 
 const bannerAsk = (text: string, labels: string[]): Promise<number> =>
@@ -141,6 +130,10 @@ function folderLabel(): string {
 
 const updateFolderLabel = (): void => {
   byId("folder-name").textContent = folderLabel();
+};
+
+const updateThemeButton = (): void => {
+  byId("btn-theme").textContent = theme === "dark" ? "🌙" : "☀️";
 };
 
 async function spawnChat(): Promise<void> {
@@ -167,9 +160,14 @@ async function runLogin(): Promise<void> {
     try {
       await view!.spawn("login");
     } catch (err) {
+      // The waiter would otherwise swallow the next session's exit event.
+      exitWaiter = null;
       const choice = await bannerAsk(`${t.chatStartFailed} ${String(err)}`, [t.retry, t.runSetupAgain]);
       setBanner(null);
-      if (choice === 1) location.reload();
+      if (choice === 1) {
+        location.reload();
+        return;
+      }
       continue;
     }
     await exited;
@@ -178,8 +176,12 @@ async function runLogin(): Promise<void> {
       setBanner(null);
       return;
     }
-    await bannerAsk(t.loginFailed, [t.retry]);
+    const choice = await bannerAsk(t.loginFailed, [t.retry, t.runSetupAgain]);
     setBanner(null);
+    if (choice === 1) {
+      location.reload();
+      return;
+    }
   }
 }
 
@@ -187,12 +189,16 @@ async function boot(): Promise<void> {
   config = (await getConfig().catch(() => null)) ?? config;
   theme = config.theme === "light" ? "light" : "dark";
   applyCssTheme(theme);
-  byId("btn-theme").textContent = theme === "dark" ? "🌙" : "☀️";
+  updateThemeButton();
   updateFolderLabel();
 
   const wizard = new SetupWizard(screens.setup);
 
-  const sys = await checkSystem().catch(() => null);
+  // Independent probes; locating the binary must not wait for the network.
+  const [sys, located] = await Promise.all([
+    checkSystem().catch(() => null),
+    locateKiro().catch(() => null),
+  ]);
   if (sys && sys.os === "windows" && (!sys.win11 || !sys.archOk)) {
     show(screens.setup);
     await wizard.systemWarning();
@@ -203,7 +209,7 @@ async function boot(): Promise<void> {
   }
   wizard.markStep("system", "done");
 
-  let info = await locateKiro().catch(() => null);
+  let info = located;
   if (!info) {
     show(screens.setup);
     info = await wizard.runInstall();
@@ -251,7 +257,7 @@ byId("btn-theme").addEventListener("click", () => {
   void setConfig(config);
   applyCssTheme(theme);
   view?.setTheme(theme);
-  byId("btn-theme").textContent = theme === "dark" ? "🌙" : "☀️";
+  updateThemeButton();
 });
 
 byId("btn-help").addEventListener("click", () => void openUrl("https://kiro.dev/docs/cli/"));

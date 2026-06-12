@@ -104,9 +104,8 @@ fn scan_programs() -> Option<PathBuf> {
 
 fn version(bin: &Path) -> Option<String> {
     let mut cmd = Command::new(bin);
-    cmd.arg("--version").stdin(Stdio::null());
-    crate::proc::hide(&mut cmd);
-    let out = cmd.output().ok()?;
+    cmd.arg("--version");
+    let out = crate::proc::output_with_timeout(cmd, std::time::Duration::from_secs(10)).ok()?;
     if !out.status.success() {
         return None;
     }
@@ -170,9 +169,9 @@ pub async fn check_auth(app: AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let bin = locate(&app).ok_or("kiro-cli is not installed")?;
         let mut cmd = Command::new(&bin);
-        cmd.arg("whoami").stdin(Stdio::null());
-        crate::proc::hide(&mut cmd);
-        let out = cmd.output().map_err(|e| format!("whoami: {e}"))?;
+        cmd.arg("whoami");
+        let out = crate::proc::output_with_timeout(cmd, std::time::Duration::from_secs(15))
+            .map_err(|e| format!("whoami: {e}"))?;
         Ok(out.status.success())
     })
     .await
