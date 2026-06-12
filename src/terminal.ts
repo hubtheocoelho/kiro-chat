@@ -61,7 +61,7 @@ export class TerminalView {
       onPtyOutput((p) => {
         if (p.gen === this.generation) {
           this.term.write(b64ToBytes(p.data));
-        } else if (p.gen > this.generation) {
+        } else if (p.gen > this.generation && this.futureOutput.length < 256) {
           this.futureOutput.push(p);
         }
       }),

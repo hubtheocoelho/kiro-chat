@@ -154,6 +154,12 @@ async function runLogin(): Promise<void> {
   ensureView();
   show(screens.main);
   setStatus(false);
+  // Resolves true when the user prefers restarting the whole setup.
+  const askRetryOrReset = async (message: string): Promise<boolean> => {
+    const choice = await bannerAsk(message, [t.retry, t.runSetupAgain]);
+    setBanner(null);
+    return choice === 1;
+  };
   for (;;) {
     setBanner(t.loginWait);
     const exited = waitForExit();
@@ -162,9 +168,7 @@ async function runLogin(): Promise<void> {
     } catch (err) {
       // The waiter would otherwise swallow the next session's exit event.
       exitWaiter = null;
-      const choice = await bannerAsk(`${t.chatStartFailed} ${String(err)}`, [t.retry, t.runSetupAgain]);
-      setBanner(null);
-      if (choice === 1) {
+      if (await askRetryOrReset(`${t.chatStartFailed} ${String(err)}`)) {
         location.reload();
         return;
       }
@@ -176,9 +180,7 @@ async function runLogin(): Promise<void> {
       setBanner(null);
       return;
     }
-    const choice = await bannerAsk(t.loginFailed, [t.retry, t.runSetupAgain]);
-    setBanner(null);
-    if (choice === 1) {
+    if (await askRetryOrReset(t.loginFailed)) {
       location.reload();
       return;
     }
