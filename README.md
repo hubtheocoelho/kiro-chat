@@ -1,94 +1,115 @@
-# Kiro Chat — instalador amigável do Kiro CLI para Windows
+<!--
+meta-description: Kiro Chat installer for Windows — official Kiro CLI two‑click installer that automatically downloads, installs and authenticates the Kiro CLI for Windows 11 (per-user, no UAC). Download the Kiro CLI installer (NSIS) with ConPTY + xterm.js integrated.
+meta-keywords: kiro, kiro-cli, kiro cli installer, Kiro Chat installer, Kiro CLI Windows installer, install kiro-cli, kiro installer nsis, tauri, conpty, xterm.js, windows 11, per-user installer, two-click installer
+-->
 
-Instale o [Kiro CLI](https://kiro.dev/docs/cli/) em poucos cliques e converse com o Kiro numa janela bonita e simples — sem precisar saber o que é um terminal.
+# Kiro Chat — Kiro CLI Installer for Windows (English, SEO optimized)
 
-O **Kiro Chat** é um aplicativo desktop (Tauri 2) que embute um **terminal de verdade** (ConPTY + xterm.js). O `kiro-cli` roda dentro dele como um processo normal do seu usuário, com **os mesmos acessos de quando é aberto num terminal tradicional**: pode ler e modificar arquivos e executar comandos na sua máquina, exatamente como o Kiro precisa.
+![release](https://img.shields.io/github/v/release/hubtheocoelho/kiro-cli-installer?label=release) ![license](https://img.shields.io/github/license/hubtheocoelho/kiro-cli-installer) ![platform](https://img.shields.io/badge/platform-Windows%2011-blue)
 
-> Projeto comunitário, **não oficial** — não é afiliado à AWS nem ao time do Kiro.
+Quick summary: Download the Kiro Chat two‑click installer for Windows to automatically install, authenticate and run the official Kiro CLI inside a desktop chat terminal. Per‑user NSIS installer (no UAC). Ideal search keywords: "Kiro CLI installer", "install kiro-cli Windows", "Kiro Chat installer".
 
-## Para usuários
+Table of contents
+- [What this is](#what-this-is)
+- [Top SEO keywords](#top-seo-keywords)
+- [Why use this installer](#why-use-this-installer)
+- [Requirements](#requirements)
+- [Install in 2 clicks](#install-in-2-clicks)
+- [First run behavior](#first-run-behavior)
+- [How to use](#how-to-use)
+- [Developer notes](#developer-notes)
+- [Releases & downloads](#releases--downloads)
+- [SEO & discoverability checklist](#seo--discoverability-checklist)
+- [License & disclaimer](#license--disclaimer)
 
-### Requisitos
+What this is
+---
+Kiro Chat is a Windows installer and desktop wrapper that makes Kiro CLI accessible without using a terminal. The installer automatically downloads the official Kiro CLI (from cli.kiro.dev), installs it for the current user, updates the user PATH, and opens a chat-style desktop app where `kiro-cli` runs inside a real terminal (ConPTY + xterm.js).
 
-- Windows 11 (64 bits) — requisito do próprio Kiro CLI
-- Conexão com a internet
+Top SEO keywords (use these in release notes and site metadata)
+---
+- Kiro CLI installer
+- Kiro CLI Windows installer
+- install kiro-cli
+- Kiro Chat installer
+- Kiro CLI per-user installer
+- Kiro CLI no UAC
+- Kiro CLI NSIS installer
+- Kiro CLI Tauri ConPTY xterm.js
 
-### Instalação (2 cliques)
+Why use this installer
+---
+- Two-click, per-user NSIS installer: installs without requiring administrator privileges (no UAC prompt).
+- Automatic download & install of the official Kiro CLI with progress and verification.
+- Integrates a real Windows PTY (ConPTY) and xterm.js so the CLI runs as a normal user process inside a chat UI.
+- Provides authentication flow (AWS Builder ID, Google, GitHub) and updates PATH so `kiro-cli` is available in other terminals.
 
-1. Baixe o `Kiro Chat_x.y.z_x64-setup.exe` na página de [Releases](../../releases).
-2. Execute o instalador. Como o executável ainda não é assinado digitalmente, o Windows SmartScreen pode mostrar um aviso: clique em **"Mais informações" → "Executar assim mesmo"**.
-3. Pronto. O instalador não pede permissão de administrador, cria o ícone **Kiro Chat** na área de trabalho e abre o app ao concluir.
+Requirements
+---
+- Windows 11 (64-bit) — required by the Kiro CLI
+- Internet connection to download the Kiro CLI
 
-### Primeira execução (automática)
+Install in 2 clicks
+---
+1. Go to the [Releases](../../releases) page and download `Kiro Chat_x.y.z_x64-setup.exe`.
+2. Run the EXE. If SmartScreen warns (unsigned executable), choose **More info → Run anyway**.
+3. The installer creates a desktop shortcut and launches the app.
 
-Ao abrir pela primeira vez, o app prepara tudo sozinho:
+First run behavior
+---
+On first launch the app:
+1. Validates OS and connectivity (Windows 11 x64 + online).
+2. Downloads and installs the official Kiro CLI (`cli.kiro.dev`) and updates the user PATH.
+3. Opens the browser for authentication (AWS Builder ID / Google / GitHub) and completes sign-in.
+4. Opens the chat terminal automatically. Future launches re-check dependencies and auto-repair if needed.
 
-1. **Verifica o sistema** (Windows 11 64 bits e conexão);
-2. **Baixa e instala o Kiro CLI** usando o instalador oficial (`cli.kiro.dev`), com progresso na tela — e ajusta o PATH para o `kiro-cli` funcionar também em qualquer terminal;
-3. **Conecta sua conta**: o navegador abre para login com AWS Builder ID, Google ou GitHub (grátis);
-4. **Abre o chat** automaticamente.
+How to use
+---
+- New conversation: start a fresh chat session.
+- Workspace folder (📁): choose the folder where Kiro will read/edit files.
+- Theme toggle (🌙/☀️): dark/light modes.
+- Start classic terminal: use Start Menu → **Kiro CLI (Terminal)** to open `kiro-cli` in PowerShell.
 
-Nas próximas vezes, o duplo clique no ícone vai direto para o chat. A cada abertura o app re-verifica as dependências e se auto-corrige se algo sumir.
+Developer notes
+---
+Stack:
+- Tauri 2 (Rust) + Vite + TypeScript + xterm.js
+- PTY via `portable-pty` crate (ConPTY on Windows)
+- NSIS bundler for per-user installer
 
-### Uso
+Dev prerequisites:
+- Node.js 22+
+- Rust stable
+- (Linux development) libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config libssl-dev
 
-- **Nova conversa** reinicia o chat.
-- **📁 Pasta de trabalho** escolhe a pasta na qual o Kiro vai trabalhar (ler/editar arquivos).
-- **🌙/☀️** alterna tema escuro/claro; **?** abre a documentação.
-- Menu Iniciar → **Kiro CLI (Terminal)** abre o `kiro-cli` num PowerShell tradicional, para quem preferir o jeito clássico.
-
-### Desinstalação
-
-Configurações → Aplicativos → **Kiro Chat** → Desinstalar. (O Kiro CLI em si é independente e permanece instalado; remova-o seguindo a [documentação oficial](https://kiro.dev/docs/cli/installation/).)
-
-## Para desenvolvedores
-
-### Stack
-
-- **App**: Tauri 2 (Rust) + Vite + TypeScript puro + xterm.js 5
-- **PTY**: [`portable-pty`](https://crates.io/crates/portable-pty) (ConPTY no Windows)
-- **Instalador**: bundler NSIS do Tauri — per-user (sem UAC), idiomas pt-BR/en, atalho na área de trabalho, bootstrap do WebView2
-
-### Pré-requisitos
-
-- Node.js 22+, Rust estável
-- Linux (dev): `libwebkit2gtk-4.1-dev libgtk-3-dev pkg-config libssl-dev`
-
-### Comandos
-
+Commands
+---
 ```bash
-npm install            # dependências
-npm run tauri dev      # app em modo dev (no Linux abre com um shell de testes)
-npm run typecheck      # TypeScript
-cargo test  --manifest-path src-tauri/Cargo.toml   # testes Rust
+npm install
+npm run tauri dev
+npm run typecheck
+cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-npm run build && npm run tauri build               # gera o setup .exe (no Windows)
-npm run icons          # regenera os ícones (script sem dependências)
+npm run build && npm run tauri build  # generate .exe on Windows
 ```
 
-O build de release acontece no GitHub Actions (`windows-latest`); o artefato NSIS sai em `src-tauri/target/release/bundle/nsis/`.
+Releases & downloads
+---
+Always download the latest Windows installer from the Releases page: ../../releases
 
-### Estrutura
+SEO & discoverability checklist
+---
+Copy these into GitHub repo settings, release titles and descriptions, and any website/Pages metadata:
+- Repo description: "Kiro Chat — Windows installer for Kiro CLI. Two-click NSIS installer that downloads and configures the official Kiro CLI (no UAC)."
+- Release title example: "Kiro Chat — Kiro CLI Windows installer (no UAC) — vX.Y.Z"
+- First line of release body: include: "Download the Kiro CLI installer for Windows — installs and authenticates the official Kiro CLI and makes `kiro-cli` available in PATH."
+- GitHub topics to add: `kiro`, `kiro-cli`, `kiro-installer`, `installer`, `windows`, `nsis`, `tauri`, `conpty`, `xtermjs`, `cli`, `desktop-chat`
+- README first 160 characters (meta-description above) — keep keyword phrase "Kiro CLI installer" within the first 50 characters if possible.
+- Use the exact phrase "Kiro CLI installer" in the release name, tags and the README first paragraph.
+- Add a screenshot + OG image to releases/GitHub Pages to improve social previews.
 
-```
-src/                  frontend (boot → wizard → terminal)
-src-tauri/src/
-  pty.rs              sessões ConPTY/PTY + eventos pty://output|exit
-  kiro.rs             localizar/instalar/autenticar o kiro-cli
-  deps.rs             checagens de sistema (Win11, arch, online)
-  path_env.rs         PATH persistente do usuário (HKCU)
-  config.rs           preferências em %APPDATA%/.../config.json
-src-tauri/installer-hooks.nsh   atalho extra "Kiro CLI (Terminal)"
-```
+License & disclaimer
+---
+MIT — see [LICENSE](LICENSE).
 
-### Convenção de commits (QAC)
-
-Este repositório segue a spec [QAC — Qualified Agent Commits](https://github.com/hubtheocoelho/qac-spec): commits de agentes de IA levam os trailers `Agent`, `Mode`, `What`, `Why`. Após clonar, ative o hook de validação:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-## Licença
-
-[MIT](LICENSE)
+Disclaimer: community project, not official or affiliated with AWS or the Kiro team.
