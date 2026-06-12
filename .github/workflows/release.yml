@@ -30,6 +30,11 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      - name: Sync app version from tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: node scripts/set-version.mjs "$TAG"
       - run: npm run typecheck
       - run: npm run build
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
@@ -71,6 +76,10 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      - name: Sync app version from tag
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: node scripts/set-version.mjs "$TAG"
       - run: npm run typecheck
       - run: npm run build
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
