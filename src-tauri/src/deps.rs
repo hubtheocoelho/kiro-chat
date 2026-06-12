@@ -29,7 +29,7 @@ fn check_system_blocking() -> SystemReport {
 
 #[cfg(windows)]
 fn windows_build() -> Option<u32> {
-    use std::process::{Command, Stdio};
+    use std::process::Command;
 
     let mut cmd = Command::new("reg");
     cmd.args([
@@ -37,10 +37,8 @@ fn windows_build() -> Option<u32> {
         r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion",
         "/v",
         "CurrentBuildNumber",
-    ])
-    .stdin(Stdio::null());
-    crate::proc::hide(&mut cmd);
-    let out = cmd.output().ok()?;
+    ]);
+    let out = crate::proc::output_with_timeout(cmd, std::time::Duration::from_secs(5)).ok()?;
     String::from_utf8_lossy(&out.stdout)
         .split_whitespace()
         .last()?
@@ -60,7 +58,7 @@ fn probe_online() -> bool {
     for host in ["cli.kiro.dev:443", "github.com:443"] {
         if let Ok(addrs) = host.to_socket_addrs() {
             for addr in addrs {
-                if TcpStream::connect_timeout(&addr, Duration::from_secs(4)).is_ok() {
+                if TcpStream::connect_timeout(&addr, Duration::from_secs(2)).is_ok() {
                     return true;
                 }
             }

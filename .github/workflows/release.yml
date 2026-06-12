@@ -22,6 +22,10 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build NSIS installer
         run: npm run tauri build
       - name: Create GitHub Release

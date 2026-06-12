@@ -6,7 +6,7 @@
   CreateShortcut "$SMPROGRAMS\Kiro Chat\Kiro CLI (Terminal).lnk" \
     "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" \
     `-NoExit -Command "if (Get-Command kiro-cli -ErrorAction SilentlyContinue) { kiro-cli } else { Write-Host 'Abra o Kiro Chat primeiro para concluir a instalacao do Kiro CLI.' }"` \
-    "$INSTDIR\Kiro Chat.exe" 0
+    "$INSTDIR\${MAINBINARYNAME}.exe" 0
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
