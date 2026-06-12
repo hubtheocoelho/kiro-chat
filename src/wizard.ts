@@ -7,7 +7,10 @@ import { actionButtons, type ActionSpec } from "./ui";
 type StepId = "system" | "install" | "login";
 type StepState = "pending" | "active" | "done" | "error";
 
-const MANUAL_INSTALL_COMMAND = "irm 'https://cli.kiro.dev/install.ps1' | iex";
+const IS_WINDOWS = navigator.userAgent.includes("Windows");
+const MANUAL_INSTALL_COMMAND = IS_WINDOWS
+  ? "irm 'https://cli.kiro.dev/install.ps1' | iex"
+  : "curl -fsSL https://cli.kiro.dev/install | bash";
 
 export class SetupWizard {
   constructor(private root: HTMLElement) {
@@ -104,7 +107,7 @@ export class SetupWizard {
         } catch (err) {
           this.markStep("install", "error");
           this.appendLog(String(err));
-          this.status(t.installFailed, "error");
+          this.status(IS_WINDOWS ? t.installFailed : t.installFailedLinux, "error");
           await new Promise<void>((resolve) =>
             this.actions([
               { label: t.retry, primary: true, onClick: () => resolve() },

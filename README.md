@@ -5,7 +5,7 @@ meta-keywords: kiro, kiro-cli, kiro cli installer, Kiro Chat installer, Kiro CLI
 
 # Kiro Chat — Kiro CLI Installer for Windows (English, SEO optimized)
 
-![release](https://img.shields.io/github/v/release/hubtheocoelho/kiro-cli-installer?label=release) ![license](https://img.shields.io/github/license/hubtheocoelho/kiro-cli-installer) ![platform](https://img.shields.io/badge/platform-Windows%2011-blue)
+![release](https://img.shields.io/github/v/release/hubtheocoelho/kiro-cli-installer?label=release) ![license](https://img.shields.io/github/license/hubtheocoelho/kiro-cli-installer) ![platform](https://img.shields.io/badge/platform-Windows%2011%20%7C%20Ubuntu%2022.04%2B-blue)
 
 Quick summary: Download the Kiro Chat two‑click installer for Windows to automatically install, authenticate and run the official Kiro CLI inside a desktop chat terminal. Per‑user NSIS installer (no UAC). Ideal search keywords: "Kiro CLI installer", "install kiro-cli Windows", "Kiro Chat installer".
 
@@ -46,14 +46,20 @@ Why use this installer
 
 Requirements
 ---
-- Windows 11 (64-bit) — required by the Kiro CLI
+- Windows 11 (64-bit), or Linux x86_64 (Ubuntu 22.04+ or any distro with glibc 2.35+)
 - Internet connection to download the Kiro CLI
 
 Install in 2 clicks
 ---
+**Windows**
 1. Go to the [Releases](../../releases) page and download `Kiro Chat_x.y.z_x64-setup.exe`.
 2. Run the EXE. If SmartScreen warns (unsigned executable), choose **More info → Run anyway**.
 3. The installer creates a desktop shortcut and launches the app.
+
+**Linux (Ubuntu 22.04+)**
+1. Go to the [Releases](../../releases) page and download the `.deb` (Ubuntu/Debian) or the `.AppImage` (any distro).
+2. Install the deb with `sudo apt install ./Kiro.Chat_x.y.z_amd64.deb`, or make the AppImage executable (`chmod +x`) and run it.
+3. Launch **Kiro Chat** from the app menu (or run `kiro-chat`). The app installs the official Kiro CLI into `~/.local/bin` and walks you through login on first run.
 
 First run behavior
 ---
@@ -74,8 +80,8 @@ Developer notes
 ---
 Stack:
 - Tauri 2 (Rust) + Vite + TypeScript + xterm.js
-- PTY via `portable-pty` crate (ConPTY on Windows)
-- NSIS bundler for per-user installer
+- PTY via `portable-pty` crate (ConPTY on Windows, openpty on Linux)
+- NSIS bundler for the Windows per-user installer; deb + AppImage bundles for Linux (built on Ubuntu 22.04)
 
 Dev prerequisites:
 - Node.js 22+
@@ -90,12 +96,12 @@ npm run tauri dev
 npm run typecheck
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-npm run build && npm run tauri build  # generate .exe on Windows
+npm run build && npm run tauri build  # .exe on Windows; .deb + .AppImage on Linux
 ```
 
 Releases & downloads
 ---
-Always download the latest Windows installer from the Releases page: ../../releases
+Always download the latest installers (Windows `.exe`, Linux `.deb` / `.AppImage`) from the Releases page: ../../releases
 
 SEO & discoverability checklist
 ---

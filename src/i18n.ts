@@ -20,6 +20,8 @@ const ptBR = {
   installing: "Baixando e instalando o Kiro CLI… isso pode levar alguns minutos.",
   installFailed:
     "Não foi possível instalar automaticamente. Verifique sua conexão e tente novamente — ou copie o comando manual e cole em uma janela do PowerShell.",
+  installFailedLinux:
+    "Não foi possível instalar automaticamente. Verifique sua conexão e tente novamente — ou copie o comando manual e cole em um terminal.",
   copyCommand: "Copiar comando manual",
   copied: "Copiado!",
   detailsLabel: "Detalhes técnicos",
@@ -72,6 +74,8 @@ const en: Dict = {
   installing: "Downloading and installing the Kiro CLI… this can take a few minutes.",
   installFailed:
     "Automatic installation failed. Check your connection and try again — or copy the manual command and paste it into a PowerShell window.",
+  installFailedLinux:
+    "Automatic installation failed. Check your connection and try again — or copy the manual command and paste it into a terminal.",
   copyCommand: "Copy manual command",
   copied: "Copied!",
   detailsLabel: "Technical details",
