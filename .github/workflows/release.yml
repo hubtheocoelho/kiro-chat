@@ -33,6 +33,12 @@ jobs:
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build NSIS installer
         run: npm run tauri build
+      - name: Remove previous release for this tag (republish)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "${{ inputs.tag }}" --cleanup-tag --yes
+        continue-on-error: true
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
