@@ -21,7 +21,6 @@ base64 = "0.22"
 dirs = "6"
 
 [profile.release]
-codegen-units = 1
-lto = true
+lto = "thin"
 opt-level = "s"
 strip = true
