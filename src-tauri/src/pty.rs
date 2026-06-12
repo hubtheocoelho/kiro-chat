@@ -228,15 +228,25 @@ mod tests {
         let mut child = pair.slave.spawn_command(cmd).unwrap();
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().unwrap();
-        let mut out = String::new();
-        let mut buf = [0u8; 4096];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(n) => out.push_str(&String::from_utf8_lossy(&buf[..n])),
+
+        // Read on a thread: on Windows the master reader only sees EOF once
+        // the pseudo console is closed, so reading to EOF inline would
+        // deadlock. Wait for the child, then drop the master to release it.
+        let collector = std::thread::spawn(move || {
+            let mut out = String::new();
+            let mut buf = [0u8; 4096];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => out.push_str(&String::from_utf8_lossy(&buf[..n])),
+                }
             }
-        }
+            out
+        });
         child.wait().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        drop(pair.master);
+        let out = collector.join().unwrap();
         assert!(out.contains("kiro-pty-ok"), "pty output was: {out:?}");
     }
 }
