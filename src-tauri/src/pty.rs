@@ -229,24 +229,35 @@ mod tests {
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().unwrap();
 
-        // Read on a thread: on Windows the master reader only sees EOF once
-        // the pseudo console is closed, so reading to EOF inline would
-        // deadlock. Wait for the child, then drop the master to release it.
-        let collector = std::thread::spawn(move || {
-            let mut out = String::new();
+        // ConPTY readers do not reliably observe EOF even after the child
+        // exits and the master is dropped, so never block the test on it:
+        // stream chunks through a channel and stop on match or deadline.
+        let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+        std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
-                    Ok(n) => out.push_str(&String::from_utf8_lossy(&buf[..n])),
+                    Ok(n) => {
+                        if tx.send(buf[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
                 }
             }
-            out
         });
-        child.wait().unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(300));
-        drop(pair.master);
-        let out = collector.join().unwrap();
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let mut out = String::new();
+        while !out.contains("kiro-pty-ok") && std::time::Instant::now() < deadline {
+            match rx.recv_timeout(std::time::Duration::from_millis(500)) {
+                Ok(chunk) => out.push_str(&String::from_utf8_lossy(&chunk)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        let _ = child.kill();
+        let _ = child.wait();
         assert!(out.contains("kiro-pty-ok"), "pty output was: {out:?}");
     }
 }
