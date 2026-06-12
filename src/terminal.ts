@@ -9,6 +9,7 @@ import {
   b64ToBytes,
   onPtyExit,
   onPtyOutput,
+  ptyKill,
   ptyResize,
   ptySpawn,
   ptyWrite,
@@ -25,14 +26,15 @@ export class TerminalView {
   private fit = new FitAddon();
   private generation = 0;
   private resizeTimer: number | undefined;
-  private ready: Promise<void>;
-  // Events of a session newer than `generation` can land before ptySpawn's
-  // response assigns it (IPC events and invoke replies are not ordered), so
-  // they are buffered and replayed right after the assignment.
+  private ready: Promise<Array<() => void>>;
+  private spawning = false;
+  // Events of the session being spawned can land before ptySpawn's response
+  // assigns the generation (IPC events and invoke replies are not ordered),
+  // so they are buffered while spawning and replayed after the assignment.
   private futureOutput: PtyOutput[] = [];
   private futureExit: PtyExit | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(private container: HTMLElement) {
     this.term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
@@ -53,7 +55,7 @@ export class TerminalView {
     this.fit.fit();
 
     this.term.onData((data) => {
-      ptyWrite(data).catch(() => {});
+      if (this.generation) ptyWrite(this.generation, data).catch(() => {});
     });
     new ResizeObserver(() => this.scheduleResize()).observe(container);
 
@@ -61,35 +63,46 @@ export class TerminalView {
       onPtyOutput((p) => {
         if (p.gen === this.generation) {
           this.term.write(b64ToBytes(p.data));
-        } else if (p.gen > this.generation && this.futureOutput.length < 256) {
+        } else if (this.spawning && p.gen > this.generation && this.futureOutput.length < 256) {
           this.futureOutput.push(p);
         }
       }),
       onPtyExit((p) => {
         if (p.gen === this.generation) {
           this.onExit(p.code);
-        } else if (p.gen > this.generation) {
+        } else if (this.spawning && p.gen > this.generation) {
           this.futureExit = p;
         }
       }),
-    ]).then(() => {});
+    ]);
   }
 
   async spawn(mode: SpawnMode, cwd: string | null = null): Promise<void> {
     await this.ready;
+    // Drop the previous session of this tab (restart in place) so it does
+    // not linger in the backend.
+    if (this.generation) {
+      ptyKill(this.generation).catch(() => {});
+      this.generation = 0;
+    }
+    this.spawning = true;
     this.futureOutput = [];
     this.takePendingExit();
     this.term.reset();
     this.fit.fit();
-    const generation = await ptySpawn(mode, cwd, this.term.cols, this.term.rows);
-    this.generation = generation;
-    const replay = this.futureOutput.filter((p) => p.gen === generation);
-    this.futureOutput = [];
-    for (const p of replay) this.term.write(b64ToBytes(p.data));
-    this.term.focus();
-    const pendingExit = this.takePendingExit();
-    if (pendingExit?.gen === generation) {
-      this.onExit(pendingExit.code);
+    try {
+      const generation = await ptySpawn(mode, cwd, this.term.cols, this.term.rows);
+      this.generation = generation;
+      const replay = this.futureOutput.filter((p) => p.gen === generation);
+      this.futureOutput = [];
+      for (const p of replay) this.term.write(b64ToBytes(p.data));
+      this.term.focus();
+      const pendingExit = this.takePendingExit();
+      if (pendingExit?.gen === generation) {
+        this.onExit(pendingExit.code);
+      }
+    } finally {
+      this.spawning = false;
     }
   }
 
@@ -107,14 +120,33 @@ export class TerminalView {
     this.term.focus();
   }
 
+  // Refit after the tab pane becomes visible again; fitting a display:none
+  // container would collapse the terminal to its minimum size.
+  fitNow(): void {
+    if (this.container.offsetWidth > 0) this.fit.fit();
+  }
+
+  dispose(): void {
+    if (this.generation) {
+      ptyKill(this.generation).catch(() => {});
+      this.generation = 0;
+    }
+    void this.ready.then((unlisteners) => {
+      for (const unlisten of unlisteners) unlisten();
+    });
+    window.clearTimeout(this.resizeTimer);
+    this.term.dispose();
+  }
+
   private scheduleResize(): void {
     window.clearTimeout(this.resizeTimer);
     this.resizeTimer = window.setTimeout(() => {
+      if (this.container.offsetWidth === 0) return;
       const cols = this.term.cols;
       const rows = this.term.rows;
       this.fit.fit();
-      if (this.term.cols !== cols || this.term.rows !== rows) {
-        ptyResize(this.term.cols, this.term.rows).catch(() => {});
+      if (this.generation && (this.term.cols !== cols || this.term.rows !== rows)) {
+        ptyResize(this.generation, this.term.cols, this.term.rows).catch(() => {});
       }
     }, 50);
   }
