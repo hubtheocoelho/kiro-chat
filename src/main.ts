@@ -27,7 +27,6 @@ app.innerHTML = `
         <span id="status-chip" class="status-chip">${t.statusDisconnected}</span>
       </div>
       <div class="topbar-actions">
-        <button id="btn-new" class="btn">${t.newChat}</button>
         <button id="btn-folder" class="btn" title="${t.chooseFolderTip}">
           <span aria-hidden="true">📁</span> <span id="folder-name"></span>
         </button>
@@ -35,18 +34,16 @@ app.innerHTML = `
         <button id="btn-help" class="btn btn-icon" title="${t.help}">?</button>
       </div>
     </header>
+    <div class="tabbar">
+      <div id="tabs" class="tabs" role="tablist"></div>
+      <button id="btn-add-tab" class="tab-add" title="${t.newTab}">+</button>
+    </div>
     <div id="banner" class="banner hidden">
       <span id="banner-text"></span>
       <span id="banner-actions" class="banner-actions"></span>
     </div>
     <main class="content">
-      <div id="terminal" class="terminal-host"></div>
-      <div id="overlay" class="overlay hidden">
-        <div class="overlay-card">
-          <p id="overlay-msg"></p>
-          <button id="overlay-restart" class="btn btn-primary">${t.restart}</button>
-        </div>
-      </div>
+      <div id="panes" class="panes"></div>
     </main>
   </div>
 `;
@@ -66,32 +63,6 @@ function show(target: HTMLElement): void {
 
 let config: AppConfig = { kiroPath: null, theme: null, cwd: null };
 let theme: ThemeName = "dark";
-let view: TerminalView | null = null;
-let exitWaiter: ((code: number | null) => void) | null = null;
-
-function ensureView(): TerminalView {
-  if (!view) {
-    view = new TerminalView(byId("terminal"));
-    view.setTheme(theme);
-    view.onExit = (code) => {
-      if (exitWaiter) {
-        const resolve = exitWaiter;
-        exitWaiter = null;
-        resolve(code);
-        return;
-      }
-      byId("overlay-msg").textContent =
-        code === 0 ? t.sessionEnded : fmt(t.sessionEndedCode, { code: code ?? "?" });
-      byId("overlay").classList.remove("hidden");
-    };
-  }
-  return view;
-}
-
-const waitForExit = (): Promise<number | null> =>
-  new Promise((resolve) => {
-    exitWaiter = resolve;
-  });
 
 function setStatus(connected: boolean): void {
   const chip = byId("status-chip");
@@ -122,68 +93,183 @@ const bannerAsk = (text: string, labels: string[]): Promise<number> =>
     )
   );
 
-function folderLabel(): string {
-  if (!config.cwd) return t.folderDefault;
-  const parts = config.cwd.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? config.cwd;
+function folderTitle(cwd: string | null): string {
+  if (!cwd) return t.folderDefault;
+  const parts = cwd.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] ?? cwd;
 }
 
 const updateFolderLabel = (): void => {
-  byId("folder-name").textContent = folderLabel();
+  byId("folder-name").textContent = folderTitle(config.cwd);
 };
 
 const updateThemeButton = (): void => {
   byId("btn-theme").textContent = theme === "dark" ? "🌙" : "☀️";
 };
 
-async function spawnChat(): Promise<void> {
-  ensureView();
-  byId("overlay").classList.add("hidden");
+/* ------------------------------------------------------------------- tabs */
+
+interface Tab {
+  id: number;
+  cwd: string | null;
+  view: TerminalView;
+  tabEl: HTMLElement;
+  pane: HTMLElement;
+  overlay: HTMLElement;
+  overlayMsg: HTMLElement;
+}
+
+let tabs: Tab[] = [];
+let activeTabId = 0;
+let nextTabId = 1;
+
+function activateTab(id: number): void {
+  activeTabId = id;
+  for (const tab of tabs) {
+    const active = tab.id === id;
+    tab.tabEl.classList.toggle("active", active);
+    tab.tabEl.setAttribute("aria-selected", String(active));
+    tab.pane.classList.toggle("hidden", !active);
+    if (active) {
+      tab.view.fitNow();
+      tab.view.focus();
+    }
+  }
+}
+
+function closeTab(id: number): void {
+  const index = tabs.findIndex((tab) => tab.id === id);
+  if (index < 0) return;
+  const [tab] = tabs.splice(index, 1);
+  tab.view.dispose();
+  tab.tabEl.remove();
+  tab.pane.remove();
+  if (tabs.length === 0) {
+    newTab(config.cwd);
+    return;
+  }
+  if (activeTabId === id) {
+    activateTab(tabs[Math.min(index, tabs.length - 1)].id);
+  }
+}
+
+function newTab(cwd: string | null, autoSpawn = true): Tab {
+  const id = nextTabId++;
+
+  const tabEl = document.createElement("div");
+  tabEl.className = "tab";
+  tabEl.setAttribute("role", "tab");
+  const titleEl = document.createElement("span");
+  titleEl.className = "tab-title";
+  titleEl.textContent = folderTitle(cwd);
+  titleEl.title = cwd ?? t.folderDefault;
+  const closeEl = document.createElement("button");
+  closeEl.className = "tab-close";
+  closeEl.title = t.closeTab;
+  closeEl.textContent = "×";
+  tabEl.append(titleEl, closeEl);
+  byId("tabs").appendChild(tabEl);
+
+  const pane = document.createElement("div");
+  pane.className = "pane";
+  const host = document.createElement("div");
+  host.className = "terminal-host";
+  const overlay = document.createElement("div");
+  overlay.className = "overlay hidden";
+  const overlayCard = document.createElement("div");
+  overlayCard.className = "overlay-card";
+  const overlayMsg = document.createElement("p");
+  const overlayActions = document.createElement("div");
+  overlayActions.className = "overlay-actions";
+  const restartBtn = document.createElement("button");
+  restartBtn.className = "btn btn-primary";
+  restartBtn.textContent = t.restart;
+  const closeTabBtn = document.createElement("button");
+  closeTabBtn.className = "btn";
+  closeTabBtn.textContent = t.closeTab;
+  overlayActions.append(restartBtn, closeTabBtn);
+  overlayCard.append(overlayMsg, overlayActions);
+  overlay.appendChild(overlayCard);
+  pane.append(host, overlay);
+  byId("panes").appendChild(pane);
+
+  const view = new TerminalView(host);
+  view.setTheme(theme);
+
+  const tab: Tab = { id, cwd, view, tabEl, pane, overlay, overlayMsg };
+  view.onExit = (code) => {
+    overlayMsg.textContent =
+      code === 0 ? t.sessionEnded : fmt(t.sessionEndedCode, { code: code ?? "?" });
+    overlay.classList.remove("hidden");
+  };
+
+  tabEl.addEventListener("click", () => activateTab(id));
+  closeEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeTab(id);
+  });
+  restartBtn.addEventListener("click", () => void spawnChat(tab));
+  closeTabBtn.addEventListener("click", () => closeTab(id));
+
+  tabs.push(tab);
+  activateTab(id);
+  if (autoSpawn) void spawnChat(tab);
+  return tab;
+}
+
+/* --------------------------------------------------------------- sessions */
+
+async function spawnChat(tab: Tab): Promise<void> {
+  tab.overlay.classList.add("hidden");
   setBanner(null);
   try {
-    await view!.spawn("chat", config.cwd);
+    await tab.view.spawn("chat", tab.cwd);
   } catch (err) {
     const choice = await bannerAsk(`${t.chatStartFailed} ${String(err)}`, [t.retry, t.runSetupAgain]);
     setBanner(null);
-    if (choice === 0) return spawnChat();
+    if (choice === 0) return spawnChat(tab);
     location.reload();
   }
 }
 
-async function runLogin(): Promise<void> {
-  ensureView();
+async function runLogin(tab: Tab): Promise<void> {
   show(screens.main);
   setStatus(false);
+  const defaultExit = tab.view.onExit;
   // Resolves true when the user prefers restarting the whole setup.
   const askRetryOrReset = async (message: string): Promise<boolean> => {
     const choice = await bannerAsk(message, [t.retry, t.runSetupAgain]);
     setBanner(null);
     return choice === 1;
   };
-  for (;;) {
-    setBanner(t.loginWait);
-    const exited = waitForExit();
-    try {
-      await view!.spawn("login");
-    } catch (err) {
-      // The waiter would otherwise swallow the next session's exit event.
-      exitWaiter = null;
-      if (await askRetryOrReset(`${t.chatStartFailed} ${String(err)}`)) {
+  try {
+    for (;;) {
+      setBanner(t.loginWait);
+      const exited = new Promise<number | null>((resolve) => {
+        tab.view.onExit = resolve;
+      });
+      try {
+        await tab.view.spawn("login");
+      } catch (err) {
+        if (await askRetryOrReset(`${t.chatStartFailed} ${String(err)}`)) {
+          location.reload();
+          return;
+        }
+        continue;
+      }
+      await exited;
+      const authed = await checkAuth().catch(() => false);
+      if (authed) {
+        setBanner(null);
+        return;
+      }
+      if (await askRetryOrReset(t.loginFailed)) {
         location.reload();
         return;
       }
-      continue;
     }
-    await exited;
-    const authed = await checkAuth().catch(() => false);
-    if (authed) {
-      setBanner(null);
-      return;
-    }
-    if (await askRetryOrReset(t.loginFailed)) {
-      location.reload();
-      return;
-    }
+  } finally {
+    tab.view.onExit = defaultExit;
   }
 }
 
@@ -222,19 +308,22 @@ async function boot(): Promise<void> {
   if (!authed) {
     show(screens.setup);
     await wizard.askLogin();
-    await runLogin();
+    show(screens.main);
+    const tab = newTab(config.cwd, false);
+    await runLogin(tab);
     wizard.markStep("login", "done");
+    setStatus(true);
+    await spawnChat(tab);
+    return;
   }
 
   setStatus(true);
   show(screens.main);
-  await spawnChat();
+  newTab(config.cwd);
 }
 
-byId("overlay-restart").addEventListener("click", () => void spawnChat());
-
-byId("btn-new").addEventListener("click", () => {
-  if (view) void spawnChat();
+byId("btn-add-tab").addEventListener("click", () => {
+  newTab(config.cwd);
 });
 
 byId("btn-folder").addEventListener("click", () => {
@@ -248,7 +337,7 @@ byId("btn-folder").addEventListener("click", () => {
       config.cwd = picked;
       void setConfig(config);
       updateFolderLabel();
-      void spawnChat();
+      newTab(picked);
     }
   })();
 });
@@ -258,7 +347,7 @@ byId("btn-theme").addEventListener("click", () => {
   config.theme = theme;
   void setConfig(config);
   applyCssTheme(theme);
-  view?.setTheme(theme);
+  for (const tab of tabs) tab.view.setTheme(theme);
   updateThemeButton();
 });
 

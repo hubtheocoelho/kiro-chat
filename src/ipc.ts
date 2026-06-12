@@ -16,9 +16,13 @@ export interface PtyExit {
 export const ptySpawn = (mode: SpawnMode, cwd: string | null, cols: number, rows: number) =>
   invoke<number>("pty_spawn", { mode, cwd, cols, rows });
 
-export const ptyWrite = (data: string) => invoke<void>("pty_write", { data });
+export const ptyWrite = (generation: number, data: string) =>
+  invoke<void>("pty_write", { generation, data });
 
-export const ptyResize = (cols: number, rows: number) => invoke<void>("pty_resize", { cols, rows });
+export const ptyResize = (generation: number, cols: number, rows: number) =>
+  invoke<void>("pty_resize", { generation, cols, rows });
+
+export const ptyKill = (generation: number) => invoke<void>("pty_kill", { generation });
 
 export const onPtyOutput = (cb: (p: PtyOutput) => void): Promise<UnlistenFn> =>
   listen<PtyOutput>("pty://output", (e) => cb(e.payload));

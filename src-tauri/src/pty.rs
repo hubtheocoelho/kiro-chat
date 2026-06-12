@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -9,17 +10,20 @@ use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, Pt
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
-// Monotonic session id; events carry it so the frontend can drop output that
-// belongs to a session it already abandoned.
+// Monotonic session id; events carry it so the frontend can route output to
+// the tab that owns the session and drop output of sessions it abandoned.
 static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
 
-// The writer lives behind its own lock: writes block while the child is not
-// draining input, and that must not wedge resize/kill/spawn, which only need
-// the session lock.
+// Each writer lives behind its own lock: writes block while the child is not
+// draining input, and that must not wedge resize/kill/spawn of any session,
+// which only need the map locks.
+type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
+
+// Sessions are keyed by generation so several tabs can run concurrently.
 #[derive(Default)]
 pub struct PtyState {
-    session: Arc<Mutex<Option<PtySession>>>,
-    writer: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
+    sessions: Arc<Mutex<HashMap<u64, PtySession>>>,
+    writers: Arc<Mutex<HashMap<u64, SharedWriter>>>,
 }
 
 pub struct PtySession {
@@ -73,8 +77,6 @@ pub fn spawn_session(
     cols: u16,
     rows: u16,
 ) -> Result<u64, String> {
-    kill_current(state);
-
     let generation = NEXT_GENERATION.fetch_add(1, Ordering::SeqCst);
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -129,27 +131,37 @@ pub fn spawn_session(
         }
     });
 
+    // Register the session before watching for its exit so a child that dies
+    // immediately cannot have its map entries removed before they exist.
+    state.sessions.lock().insert(
+        generation,
+        PtySession {
+            master: pair.master,
+            killer,
+        },
+    );
+    state.writers.lock().insert(generation, Arc::new(Mutex::new(writer)));
+
     let exit_app = app.clone();
+    let sessions = state.sessions.clone();
+    let writers = state.writers.clone();
     std::thread::spawn(move || {
         let code = child.wait().ok().map(|s| s.exit_code() as i32);
+        sessions.lock().remove(&generation);
+        writers.lock().remove(&generation);
         let _ = exit_app.emit("pty://exit", ExitPayload { generation, code });
     });
 
-    *state.session.lock() = Some(PtySession {
-        master: pair.master,
-        killer,
-    });
-    *state.writer.lock() = Some(writer);
     Ok(generation)
 }
 
-fn kill_current(state: &PtyState) {
-    // Kill the child before touching the writer lock: a write blocked on a
+fn kill_session(state: &PtyState, generation: u64) {
+    // Kill the child before dropping the writer: a write blocked on a
     // stuffed pipe only returns once the child dies.
-    if let Some(mut session) = state.session.lock().take() {
+    if let Some(mut session) = state.sessions.lock().remove(&generation) {
         let _ = session.killer.kill();
     }
-    *state.writer.lock() = None;
+    state.writers.lock().remove(&generation);
 }
 
 #[tauri::command]
@@ -175,17 +187,29 @@ pub fn pty_spawn(
 }
 
 #[tauri::command]
-pub fn pty_write(state: State<PtyState>, data: String) -> Result<(), String> {
-    let mut guard = state.writer.lock();
-    let writer = guard.as_mut().ok_or("no active session")?;
+pub fn pty_write(state: State<PtyState>, generation: u64, data: String) -> Result<(), String> {
+    // Clone the handle and drop the map lock before writing so a blocked
+    // write never wedges the other sessions.
+    let writer = state
+        .writers
+        .lock()
+        .get(&generation)
+        .cloned()
+        .ok_or("no active session")?;
+    let mut writer = writer.lock();
     writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
     writer.flush().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn pty_resize(state: State<PtyState>, cols: u16, rows: u16) -> Result<(), String> {
-    let guard = state.session.lock();
-    let session = guard.as_ref().ok_or("no active session")?;
+pub fn pty_resize(
+    state: State<PtyState>,
+    generation: u64,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
+    let guard = state.sessions.lock();
+    let session = guard.get(&generation).ok_or("no active session")?;
     session
         .master
         .resize(PtySize {
@@ -198,8 +222,8 @@ pub fn pty_resize(state: State<PtyState>, cols: u16, rows: u16) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn pty_kill(state: State<PtyState>) {
-    kill_current(&state);
+pub fn pty_kill(state: State<PtyState>, generation: u64) {
+    kill_session(&state, generation);
 }
 
 #[cfg(test)]
