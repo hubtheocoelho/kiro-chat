@@ -120,6 +120,15 @@ export class TerminalView {
     this.term.focus();
   }
 
+  // While the exit overlay is shown the terminal sits behind a modal and must
+  // not keep keyboard focus or feed a dead PTY. Disabling stdin and releasing
+  // focus hands input to the modal; re-enabling restores it on restart.
+  setInputEnabled(enabled: boolean): void {
+    this.term.options.disableStdin = !enabled;
+    if (enabled) this.term.focus();
+    else this.term.blur();
+  }
+
   // Refit after the tab pane becomes visible again; fitting a display:none
   // container would collapse the terminal to its minimum size.
   fitNow(): void {

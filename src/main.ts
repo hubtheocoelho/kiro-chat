@@ -117,6 +117,7 @@ interface Tab {
   pane: HTMLElement;
   overlay: HTMLElement;
   overlayMsg: HTMLElement;
+  overlayFocus: HTMLElement;
 }
 
 let tabs: Tab[] = [];
@@ -132,7 +133,10 @@ function activateTab(id: number): void {
     tab.pane.classList.toggle("hidden", !active);
     if (active) {
       tab.view.fitNow();
-      tab.view.focus();
+      // If this tab's session ended, its modal owns input — don't pull focus
+      // back into the terminal sitting behind the overlay.
+      if (tab.overlay.classList.contains("hidden")) tab.view.focus();
+      else tab.overlayFocus.focus();
     }
   }
 }
@@ -176,9 +180,13 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   host.className = "terminal-host";
   const overlay = document.createElement("div");
   overlay.className = "overlay hidden";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
   const overlayCard = document.createElement("div");
   overlayCard.className = "overlay-card";
   const overlayMsg = document.createElement("p");
+  overlayMsg.id = `overlay-msg-${id}`;
+  overlay.setAttribute("aria-labelledby", overlayMsg.id);
   const overlayActions = document.createElement("div");
   overlayActions.className = "overlay-actions";
   const restartBtn = document.createElement("button");
@@ -196,11 +204,11 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   const view = new TerminalView(host);
   view.setTheme(theme);
 
-  const tab: Tab = { id, cwd, view, tabEl, pane, overlay, overlayMsg };
+  const tab: Tab = { id, cwd, view, tabEl, pane, overlay, overlayMsg, overlayFocus: restartBtn };
   view.onExit = (code) => {
     overlayMsg.textContent =
       code === 0 ? t.sessionEnded : fmt(t.sessionEndedCode, { code: code ?? "?" });
-    overlay.classList.remove("hidden");
+    showOverlay(tab);
   };
 
   tabEl.addEventListener("click", () => activateTab(id));
@@ -210,6 +218,21 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   });
   restartBtn.addEventListener("click", () => void spawnChat(tab));
   closeTabBtn.addEventListener("click", () => closeTab(id));
+  // Trap Tab within the dialog so focus can't fall back into the blurred
+  // terminal behind it.
+  overlay.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    const order = [restartBtn, closeTabBtn];
+    const dir = e.shiftKey ? -1 : 1;
+    const here = order.indexOf(document.activeElement as HTMLButtonElement);
+    order[(here + dir + order.length) % order.length].focus();
+  });
+  // Clicking the dimmed backdrop must not blur the dialog (which would hand
+  // focus back to the terminal).
+  overlay.addEventListener("mousedown", (e) => {
+    if (e.target === overlay) e.preventDefault();
+  });
 
   tabs.push(tab);
   activateTab(id);
@@ -217,10 +240,24 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   return tab;
 }
 
+// The exit overlay is a modal: while shown it must own mouse and keyboard
+// input. Showing it blocks the terminal behind it and moves focus to the
+// primary action; hiding it returns input to the terminal.
+function showOverlay(tab: Tab): void {
+  tab.view.setInputEnabled(false);
+  tab.overlay.classList.remove("hidden");
+  tab.overlayFocus.focus();
+}
+
+function hideOverlay(tab: Tab): void {
+  tab.overlay.classList.add("hidden");
+  tab.view.setInputEnabled(true);
+}
+
 /* --------------------------------------------------------------- sessions */
 
 async function spawnChat(tab: Tab): Promise<void> {
-  tab.overlay.classList.add("hidden");
+  hideOverlay(tab);
   setBanner(null);
   try {
     await tab.view.spawn("chat", tab.cwd);
