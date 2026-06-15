@@ -1,0 +1,61 @@
+name: Forge pipeline (→ staging)
+
+# Esteira do agente: toda branch forge-* vira um PR para `staging` com review
+# do Copilot (advisory) e auto-merge. O merge só acontece quando os required
+# status checks (definidos na branch protection de `staging`) ficam verdes.
+# Os checks em si são os de ci.yml, que já roda no push desta mesma branch.
+
+on:
+  push:
+    branches: ["forge-**"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: forge-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  to-staging:
+    name: Abrir PR + Copilot review + auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Garantir PR forge-* → staging, pedir Copilot, ligar auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BR="${GITHUB_REF_NAME}"
+
+          # PR aberto desta branch para staging (se já existir, reaproveita).
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                 --head "$BR" --base staging --state open \
+                 --json number --jq '.[0].number // empty')
+
+          if [ -z "$PR" ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" \
+              --base staging --head "$BR" \
+              --title "forge: ${BR} → staging" \
+              --body $'Aberto automaticamente pela esteira **forge**.\n\nMerge (squash) automático assim que os required checks ficarem verdes. Review do Copilot é consultivo.'
+            PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                   --head "$BR" --base staging --state open \
+                   --json number --jq '.[0].number')
+          fi
+          echo "PR=#$PR"
+
+          # Review do Copilot (consultivo). Best-effort: o caminho robusto é o
+          # toggle "Automatically request Copilot review" em Settings; a chamada
+          # abaixo cobre o caso de não estar ligado. Não falha a esteira.
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR}/requested_reviewers" \
+            -f "reviewers[]=copilot-pull-request-reviewer[bot]" >/dev/null 2>&1 || \
+            echo "::notice::Copilot review não solicitado via API (habilite o auto-request em Settings → Copilot)."
+
+          # Auto-merge squash: a branch protection de staging exige os checks de
+          # CI, então o GitHub só funde quando passarem. Sem proteção, fundiria
+          # na hora — por isso o setup de branch protection é obrigatório.
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto

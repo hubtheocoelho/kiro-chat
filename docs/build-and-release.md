@@ -53,6 +53,13 @@ Jobs:
 **clippy warnings fail CI.** Linux bundles are built on **Ubuntu 22.04** on
 purpose, for glibc compatibility (works on 22.04+).
 
+## Promotion pipeline
+
+The agent promotion pipeline (`forge-* → staging → main`) is documented
+separately in [pipeline.md](pipeline.md): `forge-pipeline.yml` (auto-merge to
+`staging`), `promote-to-main.yml` (manual PR to `main`), branch protection, and
+the one-time `scripts/setup-pipeline.sh` setup.
+
 ## Release — `.github/workflows/release.yml`
 
 Triggered by pushing a `v*` tag, or manually via `workflow_dispatch` with a `tag`

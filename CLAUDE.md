@@ -39,6 +39,7 @@ and `cargo test`** — clippy warnings fail CI.
 | [docs/backend.md](docs/backend.md) | Editing anything under `src-tauri/src/` (Rust) |
 | [docs/frontend.md](docs/frontend.md) | Editing anything under `src/` (TypeScript/UI) |
 | [docs/build-and-release.md](docs/build-and-release.md) | Touching CI, bundling, versioning, icons, or installers |
+| [docs/pipeline.md](docs/pipeline.md) | Working with the `forge → staging → main` promotion pipeline, auto-merge, or branch protection |
 
 ## Repository layout
 
