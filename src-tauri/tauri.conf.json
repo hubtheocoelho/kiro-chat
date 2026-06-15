@@ -13,11 +13,13 @@
     "windows": [
       {
         "title": "Kiro Chat",
+        "label": "main",
         "width": 1000,
         "height": 700,
         "minWidth": 640,
         "minHeight": 480,
-        "center": true
+        "center": true,
+        "decorations": false
       }
     ],
     "security": {

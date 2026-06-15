@@ -31,12 +31,16 @@ cargo test  --manifest-path src-tauri/Cargo.toml
   (`dev.kirochat.app`), window size, `beforeDevCommand`/`beforeBuildCommand`
   (wired to the npm scripts), `frontendDist: ../dist`, and the **NSIS** bundle
   (per-user `installMode: currentUser` — no UAC; pt-BR + English; custom
-  `installer-hooks.nsh`; `startMenuFolder`).
+  `installer-hooks.nsh`; `startMenuFolder`). The main window runs with
+  `decorations: false` (no native frame); the frontend draws its own titlebar
+  with embedded minimize/maximize/close controls.
 - `src-tauri/tauri.linux.conf.json` — Linux bundle overrides (`deb` depends on
   `curl`; `appimage`). Tauri merges this over the base config on Linux.
 - `src-tauri/capabilities/default.json` — permission grants for the main window:
-  `core:default`, `opener:default`, `dialog:default`. Add a grant here if you use
-  a new plugin capability.
+  `core:default`, `opener:default`, `dialog:default`, plus the window controls
+  the custom titlebar drives (`core:window:allow-minimize`,
+  `allow-toggle-maximize`, `allow-is-maximized`, `allow-start-dragging`,
+  `allow-close`). Add a grant here if you use a new plugin capability.
 - `src-tauri/installer-hooks.nsh` — NSIS hooks; adds/removes a Start Menu shortcut
   that opens `kiro-cli` in a classic PowerShell window.
 
