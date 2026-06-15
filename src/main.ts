@@ -1,6 +1,7 @@
 import "./styles.css";
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { fmt, t } from "./i18n";
 import { checkAuth, checkSystem, getConfig, locateKiro, setConfig, type AppConfig } from "./ipc";
@@ -11,16 +12,16 @@ import { SetupWizard } from "./wizard";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
-  <div id="screen-splash" class="screen splash">
+  <div id="screen-splash" class="screen splash" data-tauri-drag-region>
     <div class="setup-logo">❯_</div>
     <p class="dim">${t.splash}</p>
     <div class="spinner"></div>
   </div>
 
-  <div id="screen-setup" class="screen setup hidden"></div>
+  <div id="screen-setup" class="screen setup hidden" data-tauri-drag-region></div>
 
   <div id="screen-main" class="screen main hidden">
-    <header class="topbar">
+    <header class="topbar" data-tauri-drag-region>
       <div class="brand">
         <span class="brand-icon">❯_</span>
         <span class="brand-name">${t.appName}</span>
@@ -32,6 +33,11 @@ app.innerHTML = `
         </button>
         <button id="btn-theme" class="btn btn-icon" title="${t.toggleTheme}">🌙</button>
         <button id="btn-help" class="btn btn-icon" title="${t.help}">?</button>
+      </div>
+      <div class="window-controls">
+        <button id="btn-win-min" class="win-btn" title="${t.minimizeWindow}" aria-label="${t.minimizeWindow}">─</button>
+        <button id="btn-win-max" class="win-btn" title="${t.maximizeWindow}" aria-label="${t.maximizeWindow}">▢</button>
+        <button id="btn-win-close" class="win-btn win-btn-close" title="${t.closeWindow}" aria-label="${t.closeWindow}">✕</button>
       </div>
     </header>
     <div class="tabbar">
@@ -352,5 +358,26 @@ byId("btn-theme").addEventListener("click", () => {
 });
 
 byId("btn-help").addEventListener("click", () => void openUrl("https://kiro.dev/docs/cli/"));
+
+/* -------------------------------------------------------- window controls */
+
+// Custom titlebar: the native frame is disabled (decorations: false), so the
+// minimize/maximize/close buttons must drive the window over IPC ourselves.
+const appWindow = getCurrentWindow();
+
+const updateMaxButton = (maximized: boolean): void => {
+  const btn = byId("btn-win-max");
+  btn.textContent = maximized ? "❐" : "▢";
+  const tip = maximized ? t.restoreWindow : t.maximizeWindow;
+  btn.title = tip;
+  btn.setAttribute("aria-label", tip);
+};
+
+byId("btn-win-min").addEventListener("click", () => void appWindow.minimize());
+byId("btn-win-max").addEventListener("click", () => void appWindow.toggleMaximize());
+byId("btn-win-close").addEventListener("click", () => void appWindow.close());
+
+void appWindow.isMaximized().then(updateMaxButton);
+void appWindow.onResized(() => void appWindow.isMaximized().then(updateMaxButton));
 
 void boot();

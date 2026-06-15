@@ -46,9 +46,8 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 10px 8px 10px 16px;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--border);
   user-select: none;
@@ -109,6 +108,42 @@ body {
 
 .status-chip.ok::before {
   background: var(--ok);
+}
+
+/* ---------------------------------------------------------- window controls */
+
+/* Pushed to the far right while brand + actions sit together on the left. */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.win-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  width: 34px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.win-btn:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+}
+
+.win-btn-close:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 /* ------------------------------------------------------------------ tabbar */
