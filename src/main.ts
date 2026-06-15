@@ -1,6 +1,7 @@
 import "./styles.css";
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { fmt, t } from "./i18n";
 import { checkAuth, checkSystem, getConfig, locateKiro, setConfig, type AppConfig } from "./ipc";
@@ -11,16 +12,16 @@ import { SetupWizard } from "./wizard";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
-  <div id="screen-splash" class="screen splash">
+  <div id="screen-splash" class="screen splash" data-tauri-drag-region>
     <div class="setup-logo">❯_</div>
     <p class="dim">${t.splash}</p>
     <div class="spinner"></div>
   </div>
 
-  <div id="screen-setup" class="screen setup hidden"></div>
+  <div id="screen-setup" class="screen setup hidden" data-tauri-drag-region></div>
 
   <div id="screen-main" class="screen main hidden">
-    <header class="topbar">
+    <header class="topbar" data-tauri-drag-region>
       <div class="brand">
         <span class="brand-icon">❯_</span>
         <span class="brand-name">${t.appName}</span>
@@ -32,6 +33,11 @@ app.innerHTML = `
         </button>
         <button id="btn-theme" class="btn btn-icon" title="${t.toggleTheme}">🌙</button>
         <button id="btn-help" class="btn btn-icon" title="${t.help}">?</button>
+      </div>
+      <div class="window-controls">
+        <button id="btn-win-min" class="win-btn" title="${t.minimizeWindow}" aria-label="${t.minimizeWindow}">─</button>
+        <button id="btn-win-max" class="win-btn" title="${t.maximizeWindow}" aria-label="${t.maximizeWindow}">▢</button>
+        <button id="btn-win-close" class="win-btn win-btn-close" title="${t.closeWindow}" aria-label="${t.closeWindow}">✕</button>
       </div>
     </header>
     <div class="tabbar">
@@ -117,7 +123,6 @@ interface Tab {
   pane: HTMLElement;
   overlay: HTMLElement;
   overlayMsg: HTMLElement;
-  overlayFocus: HTMLElement;
 }
 
 let tabs: Tab[] = [];
@@ -133,10 +138,7 @@ function activateTab(id: number): void {
     tab.pane.classList.toggle("hidden", !active);
     if (active) {
       tab.view.fitNow();
-      // If this tab's session ended, its modal owns input — don't pull focus
-      // back into the terminal sitting behind the overlay.
-      if (tab.overlay.classList.contains("hidden")) tab.view.focus();
-      else tab.overlayFocus.focus();
+      tab.view.focus();
     }
   }
 }
@@ -180,13 +182,9 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   host.className = "terminal-host";
   const overlay = document.createElement("div");
   overlay.className = "overlay hidden";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
   const overlayCard = document.createElement("div");
   overlayCard.className = "overlay-card";
   const overlayMsg = document.createElement("p");
-  overlayMsg.id = `overlay-msg-${id}`;
-  overlay.setAttribute("aria-labelledby", overlayMsg.id);
   const overlayActions = document.createElement("div");
   overlayActions.className = "overlay-actions";
   const restartBtn = document.createElement("button");
@@ -204,11 +202,11 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   const view = new TerminalView(host);
   view.setTheme(theme);
 
-  const tab: Tab = { id, cwd, view, tabEl, pane, overlay, overlayMsg, overlayFocus: restartBtn };
+  const tab: Tab = { id, cwd, view, tabEl, pane, overlay, overlayMsg };
   view.onExit = (code) => {
     overlayMsg.textContent =
       code === 0 ? t.sessionEnded : fmt(t.sessionEndedCode, { code: code ?? "?" });
-    showOverlay(tab);
+    overlay.classList.remove("hidden");
   };
 
   tabEl.addEventListener("click", () => activateTab(id));
@@ -218,21 +216,6 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   });
   restartBtn.addEventListener("click", () => void spawnChat(tab));
   closeTabBtn.addEventListener("click", () => closeTab(id));
-  // Trap Tab within the dialog so focus can't fall back into the blurred
-  // terminal behind it.
-  overlay.addEventListener("keydown", (e) => {
-    if (e.key !== "Tab") return;
-    e.preventDefault();
-    const order = [restartBtn, closeTabBtn];
-    const dir = e.shiftKey ? -1 : 1;
-    const here = order.indexOf(document.activeElement as HTMLButtonElement);
-    order[(here + dir + order.length) % order.length].focus();
-  });
-  // Clicking the dimmed backdrop must not blur the dialog (which would hand
-  // focus back to the terminal).
-  overlay.addEventListener("mousedown", (e) => {
-    if (e.target === overlay) e.preventDefault();
-  });
 
   tabs.push(tab);
   activateTab(id);
@@ -240,24 +223,10 @@ function newTab(cwd: string | null, autoSpawn = true): Tab {
   return tab;
 }
 
-// The exit overlay is a modal: while shown it must own mouse and keyboard
-// input. Showing it blocks the terminal behind it and moves focus to the
-// primary action; hiding it returns input to the terminal.
-function showOverlay(tab: Tab): void {
-  tab.view.setInputEnabled(false);
-  tab.overlay.classList.remove("hidden");
-  tab.overlayFocus.focus();
-}
-
-function hideOverlay(tab: Tab): void {
-  tab.overlay.classList.add("hidden");
-  tab.view.setInputEnabled(true);
-}
-
 /* --------------------------------------------------------------- sessions */
 
 async function spawnChat(tab: Tab): Promise<void> {
-  hideOverlay(tab);
+  tab.overlay.classList.add("hidden");
   setBanner(null);
   try {
     await tab.view.spawn("chat", tab.cwd);
@@ -389,5 +358,26 @@ byId("btn-theme").addEventListener("click", () => {
 });
 
 byId("btn-help").addEventListener("click", () => void openUrl("https://kiro.dev/docs/cli/"));
+
+/* -------------------------------------------------------- window controls */
+
+// Custom titlebar: the native frame is disabled (decorations: false), so the
+// minimize/maximize/close buttons must drive the window over IPC ourselves.
+const appWindow = getCurrentWindow();
+
+const updateMaxButton = (maximized: boolean): void => {
+  const btn = byId("btn-win-max");
+  btn.textContent = maximized ? "❐" : "▢";
+  const tip = maximized ? t.restoreWindow : t.maximizeWindow;
+  btn.title = tip;
+  btn.setAttribute("aria-label", tip);
+};
+
+byId("btn-win-min").addEventListener("click", () => void appWindow.minimize());
+byId("btn-win-max").addEventListener("click", () => void appWindow.toggleMaximize());
+byId("btn-win-close").addEventListener("click", () => void appWindow.close());
+
+void appWindow.isMaximized().then(updateMaxButton);
+void appWindow.onResized(() => void appWindow.isMaximized().then(updateMaxButton));
 
 void boot();

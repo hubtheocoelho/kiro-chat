@@ -46,9 +46,8 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
+  padding: 10px 8px 10px 16px;
   background: var(--bg-raised);
   border-bottom: 1px solid var(--border);
   user-select: none;
@@ -109,6 +108,42 @@ body {
 
 .status-chip.ok::before {
   background: var(--ok);
+}
+
+/* ---------------------------------------------------------- window controls */
+
+/* Pushed to the far right while brand + actions sit together on the left. */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.win-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  width: 34px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.win-btn:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+}
+
+.win-btn-close:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 /* ------------------------------------------------------------------ tabbar */
@@ -183,22 +218,29 @@ body {
 .tab-add {
   appearance: none;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Mirror the tab shape (no bottom edge, top-rounded) so the button reads as a
+     mini-tab sitting on the same baseline instead of a floating square. */
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-dim);
   font-size: 16px;
   line-height: 1;
-  width: 28px;
-  height: 28px;
-  margin-bottom: 4px;
+  width: 30px;
+  align-self: stretch;
+  padding: 6px 0;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .tab-add:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: var(--accent);
+  color: var(--text);
 }
 
 /* ----------------------------------------------------------------- buttons */
@@ -274,10 +316,6 @@ body {
   min-height: 0;
   padding: 8px 2px 8px 10px;
   overflow: hidden;
-  /* Confine xterm's internally z-indexed layers (helpers/canvas) to their own
-     stacking context so the sibling overlay always paints — and receives
-     clicks — above the terminal, never behind it. */
-  isolation: isolate;
 }
 
 .terminal-host .xterm {
@@ -497,7 +535,6 @@ body {
 .overlay {
   position: absolute;
   inset: 0;
-  z-index: 10; /* above the terminal's isolated stacking context */
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--bg) 72%, transparent);

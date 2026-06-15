@@ -74,7 +74,10 @@ AppConfig    { kiroPath: string | null, theme: "dark"|"light"|null, cwd: string 
    Keep field names in camelCase to match serde output.
 4. **Permissions:** if the change uses a Tauri plugin capability not already
    granted, update `src-tauri/capabilities/default.json` (current grants:
-   `core:default`, `opener:default`, `dialog:default`).
+   `core:default`, `opener:default`, `dialog:default`, and the `core:window:*`
+   grants used by the custom titlebar — `allow-minimize`,
+   `allow-toggle-maximize`, `allow-is-maximized`, `allow-start-dragging`,
+   `allow-close`).
 5. Run `npm run typecheck` and `cargo clippy … -D warnings` — mismatches surface
    as TS or Rust errors.
 6. Update this file and, if the behavior is new, [architecture.md](architecture.md).

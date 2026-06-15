@@ -42,6 +42,10 @@ const ptBR = {
   folderDefault: "Pasta pessoal",
   toggleTheme: "Alternar tema claro/escuro",
   help: "Ajuda",
+  minimizeWindow: "Minimizar",
+  maximizeWindow: "Maximizar",
+  restoreWindow: "Restaurar",
+  closeWindow: "Fechar",
 
   sessionEnded: "Sessão encerrada.",
   sessionEndedCode: "Sessão encerrada (código {code}).",
@@ -96,6 +100,10 @@ const en: Dict = {
   folderDefault: "Home folder",
   toggleTheme: "Toggle light/dark theme",
   help: "Help",
+  minimizeWindow: "Minimize",
+  maximizeWindow: "Maximize",
+  restoreWindow: "Restore",
+  closeWindow: "Close",
 
   sessionEnded: "Session ended.",
   sessionEndedCode: "Session ended (code {code}).",
