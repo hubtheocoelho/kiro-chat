@@ -55,10 +55,11 @@ purpose, for glibc compatibility (works on 22.04+).
 
 ## Promotion pipeline
 
-The agent pipeline (`forge-* → forge`) is documented separately in
-[pipeline.md](pipeline.md): `forge-pipeline.yml` auto-merges `forge-*` work
-branches into the `forge` integration branch once CI checks pass. See it for
-branch protection and the one-time `scripts/setup-pipeline.sh` setup.
+The agent pipeline (`forge → staging → main`) is documented separately in
+[pipeline.md](pipeline.md): `forge-pipeline.yml` + `forge-review.yml` auto-merge
+`forge-*` work branches into `forge` once CI and the review harness pass, and
+`promote.yml` keeps the manual `forge → staging` and `staging → main` PRs open.
+See it for branch protection and the one-time `scripts/setup-pipeline.sh` setup.
 
 ## Release — `.github/workflows/release.yml`
 

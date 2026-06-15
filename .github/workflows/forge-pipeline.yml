@@ -1,9 +1,10 @@
 name: Forge pipeline (→ forge)
 
 # Esteira do agente: toda branch forge-<task> vira um PR para a branch `forge`
-# com review do Copilot (advisory) e auto-merge. O merge só acontece quando os
-# required status checks (definidos na branch protection de `forge`) ficam
-# verdes. Os checks são os de ci.yml, que já roda no push desta mesma branch.
+# com auto-merge (squash). O merge só dispara quando TODOS os required status
+# checks ficam verdes — os de ci.yml E o check "Forge agent review"
+# (forge-review.yml), que é o harness que analisa e aprova. A branch protection
+# de `forge` é o que segura o merge; sem ela, fundiria na hora.
 
 on:
   push:
@@ -18,21 +19,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  to-forge:
-    name: Abrir PR + Copilot review + auto-merge
+  open-pr:
+    name: Abrir PR forge-* → forge + auto-merge
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
-      - name: Garantir PR forge-* → forge, pedir Copilot, ligar auto-merge
+      - name: Garantir PR e ligar auto-merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           BR="${GITHUB_REF_NAME}"
 
-          # PR aberto desta branch para forge (se já existir, reaproveita).
           PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
                  --head "$BR" --base forge --state open \
                  --json number --jq '.[0].number // empty')
@@ -41,21 +41,13 @@ jobs:
             gh pr create --repo "$GITHUB_REPOSITORY" \
               --base forge --head "$BR" \
               --title "forge: ${BR} → forge" \
-              --body $'Aberto automaticamente pela esteira **forge**.\n\nMerge (squash) automático assim que os required checks ficarem verdes. Review do Copilot é consultivo.'
+              --body $'Aberto automaticamente pela esteira **forge**.\n\nMerge (squash) automático quando os required checks (CI + harness review) ficarem verdes.'
             PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
                    --head "$BR" --base forge --state open \
                    --json number --jq '.[0].number')
           fi
           echo "PR=#$PR"
 
-          # Review do Copilot (consultivo). Best-effort: o caminho robusto é o
-          # toggle "Automatically request Copilot review" em Settings; a chamada
-          # abaixo cobre o caso de não estar ligado. Não falha a esteira.
-          gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR}/requested_reviewers" \
-            -f "reviewers[]=copilot-pull-request-reviewer[bot]" >/dev/null 2>&1 || \
-            echo "::notice::Copilot review não solicitado via API (habilite o auto-request em Settings → Copilot)."
-
-          # Auto-merge squash: a branch protection de forge exige os checks de
-          # CI, então o GitHub só funde quando passarem. Sem proteção, fundiria
-          # na hora — por isso o setup de branch protection é obrigatório.
+          # Auto-merge squash: a branch protection de forge exige os checks, então
+          # o GitHub só funde quando passarem (inclusive o "Forge agent review").
           gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto
