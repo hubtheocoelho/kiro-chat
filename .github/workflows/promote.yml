@@ -1,0 +1,58 @@
+name: Promote (forge → staging → main)
+
+# Helpers das etapas MANUAIS. Mantêm os PRs de promoção abertos, mas NÃO fundem:
+# a branch protection de `staging` e `main` exige 1 aprovação humana, então cada
+# PR fica parado até você revisar e fundir.
+#   - push em forge   → mantém PR forge   → staging (blocos de entrega)
+#   - push em staging → mantém PR staging → main    (versões)
+
+on:
+  push:
+    branches: ["forge", "staging"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: promote-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  open-promotion-pr:
+    name: Manter PR de promoção
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Abrir/atualizar o PR da próxima etapa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            forge)   HEAD=forge;   BASE=staging; TITLE="promote: forge → staging (bloco de entrega)";;
+            staging) HEAD=staging; BASE=main;    TITLE="promote: staging → main (versão)";;
+            *) echo "branch não promovível"; exit 0;;
+          esac
+
+          git fetch origin "$HEAD" "$BASE" --quiet
+          if [ "$(git rev-parse "origin/$HEAD")" = "$(git rev-parse "origin/$BASE")" ]; then
+            echo "$HEAD já está em $BASE — nada a promover."
+            exit 0
+          fi
+
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                 --head "$HEAD" --base "$BASE" --state open \
+                 --json number --jq '.[0].number // empty')
+          if [ -z "$PR" ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" \
+              --base "$BASE" --head "$HEAD" --title "$TITLE" \
+              --body $'Promoção mantida pela esteira. Exige aprovação humana (branch protection) — revise e funda quando quiser.'
+          else
+            echo "PR de promoção já aberto: #$PR"
+          fi

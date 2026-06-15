@@ -1,0 +1,53 @@
+name: Forge pipeline (→ forge)
+
+# Esteira do agente: toda branch forge-<task> vira um PR para a branch `forge`
+# com auto-merge (squash). O merge só dispara quando TODOS os required status
+# checks ficam verdes — os de ci.yml E o check "Forge agent review"
+# (forge-review.yml), que é o harness que analisa e aprova. A branch protection
+# de `forge` é o que segura o merge; sem ela, fundiria na hora.
+
+on:
+  push:
+    branches: ["forge-**"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: forge-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  open-pr:
+    name: Abrir PR forge-* → forge + auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Garantir PR e ligar auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BR="${GITHUB_REF_NAME}"
+
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                 --head "$BR" --base forge --state open \
+                 --json number --jq '.[0].number // empty')
+
+          if [ -z "$PR" ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" \
+              --base forge --head "$BR" \
+              --title "forge: ${BR} → forge" \
+              --body $'Aberto automaticamente pela esteira **forge**.\n\nMerge (squash) automático quando os required checks (CI + harness review) ficarem verdes.'
+            PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                   --head "$BR" --base forge --state open \
+                   --json number --jq '.[0].number')
+          fi
+          echo "PR=#$PR"
+
+          # Auto-merge squash: a branch protection de forge exige os checks, então
+          # o GitHub só funde quando passarem (inclusive o "Forge agent review").
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto

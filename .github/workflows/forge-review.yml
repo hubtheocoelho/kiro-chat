@@ -1,0 +1,93 @@
+name: Forge agent review
+
+# Harness de review do agente. Roda em cada push de uma branch forge-* e é o
+# GATE do auto-merge para `forge`: se este job fica verde (regras OK), a branch
+# protection libera o merge; se fica vermelho (REQUEST_CHANGES), o merge trava.
+#
+# Regra atual: todo commit do agente nesta branch precisa dos quatro trailers
+# QAC (Agent, Mode, What, Why) — convenção do repo hoje só garantida pelo hook
+# local. O "CI verde" já é exigido em paralelo pela própria branch protection,
+# então aqui focamos no lint que o CI não cobre.
+#
+# O check obrigatório chama-se "Forge agent review" (o name do job abaixo).
+
+on:
+  push:
+    branches: ["forge-**"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: forge-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Forge agent review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validar trailers QAC dos commits da branch
+        id: qac
+        run: |
+          set -uo pipefail
+          git fetch origin main --quiet || true
+          BASE="$(git merge-base origin/main HEAD)"
+
+          fail=0
+          report=""
+          # Só commits sem merge desta branch (os do agente).
+          for sha in $(git rev-list --no-merges "${BASE}..HEAD"); do
+            body="$(git log -1 --format=%B "$sha")"
+            missing=""
+            for t in Agent Mode What Why; do
+              echo "$body" | grep -qE "^${t}:" || missing="${missing} ${t}"
+            done
+            if [ -n "$missing" ]; then
+              fail=1
+              report="${report}\n- $(git log -1 --format='%h %s' "$sha") — falta:${missing}"
+            fi
+          done
+
+          if [ "$fail" -ne 0 ]; then
+            echo "verdict=request-changes" >> "$GITHUB_OUTPUT"
+            { echo "report<<EOF"; echo -e "Commits sem os trailers QAC obrigatórios:${report}"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "verdict=approve" >> "$GITHUB_OUTPUT"
+            echo "report=Todos os commits têm os quatro trailers QAC." >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Postar veredito no PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          BR="${GITHUB_REF_NAME}"
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" \
+                 --head "$BR" --base forge --state open \
+                 --json number --jq '.[0].number // empty')
+
+          if [ -n "$PR" ]; then
+            BODY="${{ steps.qac.outputs.report }}"
+            if [ "${{ steps.qac.outputs.verdict }}" = "approve" ]; then
+              # github-actions[bot] não pode aprovar o próprio PR; se falhar, vira
+              # comentário. O gate real é este job ficar verde de qualquer forma.
+              gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --approve --body "✅ Harness: ${BODY}" \
+                || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "✅ Harness aprovou. ${BODY}"
+            else
+              gh pr review "$PR" --repo "$GITHUB_REPOSITORY" --request-changes --body "❌ Harness: ${BODY}" \
+                || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "❌ Harness reprovou. ${BODY}"
+            fi
+          fi
+
+      - name: Falhar o check se reprovado
+        if: steps.qac.outputs.verdict != 'approve'
+        run: |
+          echo "Harness reprovou — veja o veredito no PR."
+          exit 1
