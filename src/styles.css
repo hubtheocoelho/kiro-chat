@@ -183,22 +183,29 @@ body {
 .tab-add {
   appearance: none;
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Mirror the tab shape (no bottom edge, top-rounded) so the button reads as a
+     mini-tab sitting on the same baseline instead of a floating square. */
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-dim);
   font-size: 16px;
   line-height: 1;
-  width: 28px;
-  height: 28px;
-  margin-bottom: 4px;
+  width: 30px;
+  align-self: stretch;
+  padding: 6px 0;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .tab-add:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: var(--accent);
+  color: var(--text);
 }
 
 /* ----------------------------------------------------------------- buttons */
