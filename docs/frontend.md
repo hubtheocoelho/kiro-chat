@@ -15,11 +15,6 @@ through `ipc.ts` ([ipc-contract.md](ipc-contract.md)).
 - **Tab model:** `Tab[]` with `newTab` / `closeTab` / `activateTab`. Each tab owns
   a `TerminalView`, a tab element, a pane, and an exit overlay (restart / close).
   Closing the last tab opens a fresh one.
-- **Exit overlay is modal:** when a session exits, `showOverlay` blocks the
-  terminal's input, moves focus to the primary action, and traps Tab within the
-  dialog so input can't leak back to the blurred terminal behind it; `hideOverlay`
-  (on restart) returns input and focus to the terminal. `activateTab` respects this
-  — switching to a tab whose session ended focuses the modal, not the terminal.
 - `spawnChat` / `runLogin` — spawn sessions and handle failures via banners.
 - Top-bar actions: folder picker (sets `cwd`, persists config, opens a new tab in
   that folder), theme toggle (persists + re-themes all tabs), help link.
@@ -33,8 +28,6 @@ One xterm.js terminal per tab, wrapping at most one live PTY session.
   `pty_spawn`, stores the returned `generation`, replays buffered events.
 - Forwards keystrokes (`term.onData` → `pty_write`) and applies output
   (`pty://output` → decode base64 → `term.write`).
-- `setInputEnabled(false)` disables stdin and blurs the terminal so the exit
-  overlay owns input; `setInputEnabled(true)` re-enables and refocuses it.
 - Buffers `pty://output`/`pty://exit` events that arrive before `pty_spawn`
   returns (IPC ordering isn't guaranteed) and replays them once `generation` is
   set. Caps the buffer at 256 events.

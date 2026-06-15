@@ -274,10 +274,6 @@ body {
   min-height: 0;
   padding: 8px 2px 8px 10px;
   overflow: hidden;
-  /* Confine xterm's internally z-indexed layers (helpers/canvas) to their own
-     stacking context so the sibling overlay always paints — and receives
-     clicks — above the terminal, never behind it. */
-  isolation: isolate;
 }
 
 .terminal-host .xterm {
@@ -497,7 +493,6 @@ body {
 .overlay {
   position: absolute;
   inset: 0;
-  z-index: 10; /* above the terminal's isolated stacking context */
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
