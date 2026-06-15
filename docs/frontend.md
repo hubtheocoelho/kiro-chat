@@ -23,6 +23,12 @@ through `ipc.ts` ([ipc-contract.md](ipc-contract.md)).
 - `spawnChat` / `runLogin` — spawn sessions and handle failures via banners.
 - Top-bar actions: folder picker (sets `cwd`, persists config, opens a new tab in
   that folder), theme toggle (persists + re-themes all tabs), help link.
+- **Custom titlebar:** the native frame is disabled (`decorations: false`), so the
+  top bar is a `data-tauri-drag-region` and hosts embedded minimize/maximize/close
+  buttons driven via `getCurrentWindow()` (`@tauri-apps/api/window`). The maximize
+  button's icon/label tracks the window state through `onResized` + `isMaximized`.
+  The splash and setup screens are also drag regions so the frameless window stays
+  movable before the main screen loads.
 - `setBanner` / `bannerAsk` — recoverable errors with choice buttons.
 
 ### `terminal.ts` — `TerminalView`
