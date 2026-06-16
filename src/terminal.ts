@@ -129,6 +129,14 @@ export class TerminalView {
   // fluid while no character is lost or duplicated.
   private handleCompositionEnd(event: CompositionEvent): void {
     const data = event.data;
+    // WebKitGTK never flushes the composed text out of xterm's helper textarea
+    // after a dead key, so the character lingers there. The next keystroke makes
+    // xterm read the whole stale buffer through onData, delivering ~, then ~~,
+    // then ~~~ … — the input grows on every press. Clear the textarea here so
+    // each composition starts empty and nothing can accumulate. (Runs after
+    // xterm's own compositionend listener, so its deferred read finds it empty
+    // and does not double-send.)
+    if (this.term.textarea) this.term.textarea.value = "";
     if (!data) return;
     this.pendingComposition = data;
     window.setTimeout(() => {

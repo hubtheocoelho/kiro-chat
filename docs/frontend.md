@@ -37,7 +37,10 @@ One xterm.js terminal per tab, wrapping at most one live PTY session.
 - **Dead-key/IME input:** WebKitGTK (the Linux webview) drops composed
   characters (ã, õ, ç, a lone `~`) from xterm's `onData`. A `compositionend`
   listener on `term.textarea` re-sends the composed text, deduped against
-  xterm's own delivery so Chromium webviews (WebView2) never double-send.
+  xterm's own delivery so Chromium webviews (WebView2) never double-send. The
+  listener also clears `term.textarea` on every `compositionend`: WebKitGTK
+  leaves the composed char in xterm's helper textarea, and the next keystroke
+  would otherwise re-read the accumulated buffer (`~`, `~~`, `~~~` …).
 - Buffers `pty://output`/`pty://exit` events that arrive before `pty_spawn`
   returns (IPC ordering isn't guaranteed) and replays them once `generation` is
   set. Caps the buffer at 256 events.
