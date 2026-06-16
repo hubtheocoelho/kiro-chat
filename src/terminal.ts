@@ -63,10 +63,16 @@ export class TerminalView {
     }
     this.fit.fit();
 
+    // TEMP DEBUG: trace dead-key/IME event flow on the user's WebKitGTK so the
+    // duplication can be diagnosed from real data instead of guessed. Remove
+    // once fixed. Toggle the panel with Ctrl+Alt+D.
+    this.installImeDebug();
+
     // Plain keystrokes and control sequences (arrows, Ctrl-C, …) still flow
     // through xterm's keydown/keypress encoding untouched. Composed text is the
     // only thing we intercept (see composedAt / handleCompositionEnd).
     this.term.onData((data) => {
+      this.imeLog(`onData ${JSON.stringify(data)}`);
       if (this.generation) ptyWrite(this.generation, data).catch(() => {});
     });
     // open() created the helper textarea; forward composed input from there so
@@ -110,6 +116,68 @@ export class TerminalView {
         }
       }),
     ]);
+  }
+
+  // TEMP DEBUG — IME/dead-key event tracer. Remove once the bug is fixed.
+  private imeDebugEl: HTMLElement | null = null;
+  private imeLog(line: string): void {
+    const el = this.imeDebugEl;
+    if (!el) return;
+    const ta = this.term.textarea;
+    const tav = ta ? JSON.stringify(ta.value) : "?";
+    const row = document.createElement("div");
+    row.textContent = `${(performance.now() / 1000).toFixed(2)}  ${line}  ta=${tav}`;
+    el.appendChild(row);
+    while (el.childElementCount > 24) el.firstElementChild?.remove();
+    el.scrollTop = el.scrollHeight;
+  }
+
+  private installImeDebug(): void {
+    const el = document.createElement("div");
+    el.style.cssText =
+      "position:fixed;right:8px;bottom:8px;z-index:99999;width:46ch;max-height:46vh;overflow:auto;" +
+      "background:rgba(0,0,0,.85);color:#0f0;font:11px/1.35 monospace;padding:6px 8px;" +
+      "border:1px solid #0f0;border-radius:6px;white-space:pre-wrap;pointer-events:none;display:block";
+    const title = document.createElement("div");
+    title.textContent = "IME DEBUG (Ctrl+Alt+D) — last events:";
+    title.style.color = "#fff";
+    el.appendChild(title);
+    document.body.appendChild(el);
+    this.imeDebugEl = el;
+
+    const ta = this.term.textarea;
+    ta?.addEventListener(
+      "keydown",
+      (e) =>
+        this.imeLog(
+          `keydown key=${JSON.stringify(e.key)} code=${e.keyCode} comp=${e.isComposing}`
+        ),
+      true
+    );
+    ta?.addEventListener("compositionstart", (e) =>
+      this.imeLog(`compStart ${JSON.stringify(e.data)}`)
+    );
+    ta?.addEventListener("compositionupdate", (e) =>
+      this.imeLog(`compUpdate ${JSON.stringify(e.data)}`)
+    );
+    ta?.addEventListener("compositionend", (e) =>
+      this.imeLog(`compEnd ${JSON.stringify(e.data)}`)
+    );
+    ta?.addEventListener(
+      "input",
+      (e) => {
+        const ie = e as InputEvent;
+        this.imeLog(
+          `input type=${ie.inputType} data=${JSON.stringify(ie.data)} comp=${ie.isComposing}`
+        );
+      },
+      true
+    );
+    window.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.altKey && (e.key === "d" || e.key === "D")) {
+        el.style.display = el.style.display === "none" ? "block" : "none";
+      }
+    });
   }
 
   async spawn(mode: SpawnMode, cwd: string | null = null): Promise<void> {
