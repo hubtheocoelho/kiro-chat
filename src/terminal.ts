@@ -33,12 +33,15 @@ export class TerminalView {
   // so they are buffered while spawning and replayed after the assignment.
   private futureOutput: PtyOutput[] = [];
   private futureExit: PtyExit | null = null;
-  // xterm's composition path drops dead-key/IME input under WebKitGTK (the
-  // Linux webview): the composed character (ã, õ, ç, a lone ~) never reaches
-  // onData and is swallowed. We forward the composed text ourselves; this slot
-  // holds the in-flight string so the duplicate is suppressed on webviews
-  // (WebView2/Chromium) where xterm *does* deliver it through onData.
-  private pendingComposition: string | null = null;
+  // Dead-key/IME (ã, õ, ç, a lone ~, CJK) input is unreliable through xterm's
+  // own paths: WebKitGTK (Linux) drops the composed character, while Chromium
+  // (WebView2) delivers it — and on WebKitGTK xterm's stale helper textarea
+  // makes repeated input accumulate (~, ~~, ~~~ …). Kiro Chat is a thin terminal
+  // shell, so we own this path end to end: the composed text is forwarded once,
+  // from `compositionend`, and every xterm delivery of it is suppressed. This
+  // timestamp marks a just-committed composition; the trailing `input` event
+  // (which xterm would otherwise re-deliver) is dropped while it is fresh.
+  private composedAt = 0;
 
   constructor(private container: HTMLElement) {
     this.term = new Terminal({
@@ -60,17 +63,34 @@ export class TerminalView {
     }
     this.fit.fit();
 
+    // Plain keystrokes and control sequences (arrows, Ctrl-C, …) still flow
+    // through xterm's keydown/keypress encoding untouched. Composed text is the
+    // only thing we intercept (see composedAt / handleCompositionEnd).
     this.term.onData((data) => {
-      // xterm delivered the composed text through its normal path — keep it,
-      // just clear the slot so handleCompositionEnd does not resend it.
-      if (data === this.pendingComposition) this.pendingComposition = null;
       if (this.generation) ptyWrite(this.generation, data).catch(() => {});
     });
     // open() created the helper textarea; forward composed input from there so
-    // dead keys work on WebKitGTK. Capture would race xterm's own listener, so
-    // bind in the bubble phase (after xterm) to observe whether it sent first.
+    // dead keys work on WebKitGTK. compositionend always fires on commit, so it
+    // is our single, reliable source for the composed character.
     this.term.textarea?.addEventListener("compositionend", (e) =>
       this.handleCompositionEnd(e)
+    );
+    // Suppress xterm's own delivery of composed text so it cannot double-send
+    // (Chromium) or accumulate (WebKitGTK). The committed character arrives as
+    // an `input` event right after compositionend; capturing on the container
+    // runs before xterm's textarea listener, so stopping it here keeps xterm's
+    // _inputEvent from re-delivering. We act only in the brief post-commit
+    // window — input events during live composition are left alone so the IME
+    // (and CJK candidate editing) keeps working.
+    this.container.addEventListener(
+      "input",
+      (e) => {
+        if (Date.now() - this.composedAt < 50) {
+          e.stopImmediatePropagation();
+          if (this.term.textarea) this.term.textarea.value = "";
+        }
+      },
+      true
     );
     new ResizeObserver(() => this.scheduleResize()).observe(container);
 
@@ -121,29 +141,16 @@ export class TerminalView {
     }
   }
 
-  // Forward dead-key/IME composed text that WebKitGTK never routes through
-  // xterm's onData. We optimistically assume xterm will deliver it: if its
-  // onData fires first (Chromium-based webviews) the slot is cleared and the
-  // deferred send is skipped; when xterm drops it the slot survives the macro
-  // task and we send it once. The defer is one tick (~0ms), so input stays
-  // fluid while no character is lost or duplicated.
+  // Single source of truth for composed (dead-key/IME) text: forward the
+  // committed string to the PTY exactly once. The accompanying timestamp arms
+  // the `input` suppressor (see constructor) so xterm's own paths cannot also
+  // deliver it, and the textarea is cleared so nothing lingers to accumulate or
+  // feed xterm's deferred read on the next keystroke.
   private handleCompositionEnd(event: CompositionEvent): void {
-    const data = event.data;
-    // WebKitGTK never flushes the composed text out of xterm's helper textarea
-    // after a dead key, so the character lingers there. The next keystroke makes
-    // xterm read the whole stale buffer through onData, delivering ~, then ~~,
-    // then ~~~ … — the input grows on every press. Clear the textarea here so
-    // each composition starts empty and nothing can accumulate. (Runs after
-    // xterm's own compositionend listener, so its deferred read finds it empty
-    // and does not double-send.)
+    this.composedAt = Date.now();
     if (this.term.textarea) this.term.textarea.value = "";
-    if (!data) return;
-    this.pendingComposition = data;
-    window.setTimeout(() => {
-      if (this.pendingComposition !== data) return;
-      this.pendingComposition = null;
-      if (this.generation) ptyWrite(this.generation, data).catch(() => {});
-    }, 0);
+    const data = event.data;
+    if (data && this.generation) ptyWrite(this.generation, data).catch(() => {});
   }
 
   private takePendingExit(): PtyExit | null {

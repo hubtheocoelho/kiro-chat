@@ -34,13 +34,16 @@ One xterm.js terminal per tab, wrapping at most one live PTY session.
   `pty_spawn`, stores the returned `generation`, replays buffered events.
 - Forwards keystrokes (`term.onData` → `pty_write`) and applies output
   (`pty://output` → decode base64 → `term.write`).
-- **Dead-key/IME input:** WebKitGTK (the Linux webview) drops composed
-  characters (ã, õ, ç, a lone `~`) from xterm's `onData`. A `compositionend`
-  listener on `term.textarea` re-sends the composed text, deduped against
-  xterm's own delivery so Chromium webviews (WebView2) never double-send. The
-  listener also clears `term.textarea` on every `compositionend`: WebKitGTK
-  leaves the composed char in xterm's helper textarea, and the next keystroke
-  would otherwise re-read the accumulated buffer (`~`, `~~`, `~~~` …).
+- **Dead-key/IME input:** xterm's own delivery of composed characters (ã, õ, ç,
+  a lone `~`, CJK) is unreliable across webviews — WebKitGTK (Linux) drops it
+  and leaves a stale helper textarea that makes repeated input accumulate (`~`,
+  `~~`, `~~~` …), while Chromium (WebView2) delivers it. As a thin terminal
+  shell, Kiro Chat owns this path: `handleCompositionEnd` forwards the committed
+  text to the PTY exactly once, and a capture-phase `input` listener on the
+  container suppresses xterm's parallel delivery for a brief window after the
+  commit (plus clears `term.textarea`) so nothing is doubled or accumulated.
+  Plain keystrokes and control sequences still flow through xterm's normal
+  `onData` encoding untouched.
 - Buffers `pty://output`/`pty://exit` events that arrive before `pty_spawn`
   returns (IPC ordering isn't guaranteed) and replays them once `generation` is
   set. Caps the buffer at 256 events.
