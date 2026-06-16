@@ -33,15 +33,17 @@ export class TerminalView {
   // so they are buffered while spawning and replayed after the assignment.
   private futureOutput: PtyOutput[] = [];
   private futureExit: PtyExit | null = null;
-  // Dead-key/IME (ã, õ, ç, a lone ~, CJK) input is unreliable through xterm's
-  // own paths: WebKitGTK (Linux) drops the composed character, while Chromium
-  // (WebView2) delivers it — and on WebKitGTK xterm's stale helper textarea
-  // makes repeated input accumulate (~, ~~, ~~~ …). Kiro Chat is a thin terminal
-  // shell, so we own this path end to end: the composed text is forwarded once,
-  // from `compositionend`, and every xterm delivery of it is suppressed. This
-  // timestamp marks a just-committed composition; the trailing `input` event
-  // (which xterm would otherwise re-deliver) is dropped while it is fresh.
-  private composedAt = 0;
+  // Dead-key/IME composed text (ã, õ, ç, a lone ~, CJK) does not flow through
+  // xterm's canceled keypress path — the browser inserts it into xterm's hidden
+  // helper textarea, which xterm only ever clears on Enter/Ctrl-C. So composed
+  // characters pile up there and every xterm read (`_finalizeComposition`,
+  // `_inputEvent`, `_handleAnyTextareaChanges`) returns the whole growing buffer
+  // → the same key produces ~, then ~~, then ~~~ … As a thin terminal shell we
+  // own this path: forward the composed text to the PTY exactly once and keep
+  // the helper textarea empty so xterm can neither accumulate nor double-send.
+  // This guard is reset on every keydown and set when a commit is delivered, so
+  // a compositionend and its trailing `input` event are not both forwarded.
+  private composedDelivered = false;
 
   constructor(private container: HTMLElement) {
     this.term = new Terminal({
@@ -70,30 +72,32 @@ export class TerminalView {
 
     // Plain keystrokes and control sequences (arrows, Ctrl-C, …) still flow
     // through xterm's keydown/keypress encoding untouched. Composed text is the
-    // only thing we intercept (see composedAt / handleCompositionEnd).
+    // only thing we intercept (see composedDelivered / deliverComposed).
     this.term.onData((data) => {
       this.imeLog(`onData ${JSON.stringify(data)}`);
       if (this.generation) ptyWrite(this.generation, data).catch(() => {});
     });
-    // open() created the helper textarea; forward composed input from there so
-    // dead keys work on WebKitGTK. compositionend always fires on commit, so it
-    // is our single, reliable source for the composed character.
-    this.term.textarea?.addEventListener("compositionend", (e) =>
-      this.handleCompositionEnd(e)
-    );
-    // Suppress xterm's own delivery of composed text so it cannot double-send
-    // (Chromium) or accumulate (WebKitGTK). The committed character arrives as
-    // an `input` event right after compositionend; capturing on the container
-    // runs before xterm's textarea listener, so stopping it here keeps xterm's
-    // _inputEvent from re-delivering. We act only in the brief post-commit
-    // window — input events during live composition are left alone so the IME
-    // (and CJK candidate editing) keeps working.
+
+    const ta = this.term.textarea;
+    // A keydown begins a fresh key, so a new commit may follow: re-arm the guard.
+    ta?.addEventListener("keydown", () => {
+      this.composedDelivered = false;
+    }, true);
+    // compositionend fires when an IME/dead-key commits on webviews that emit
+    // composition events (Chromium). Deliver the committed text.
+    ta?.addEventListener("compositionend", (e) => this.deliverComposed(e.data));
+    // The committed character also (or, on WebKitGTK, only) arrives as an
+    // `input` event. Capturing on the container runs before xterm's own textarea
+    // listener, so stopping it here keeps xterm's `_inputEvent` from re-reading
+    // the helper textarea. Live IME composition (insertCompositionText /
+    // isComposing) is left untouched so candidate editing keeps working.
     this.container.addEventListener(
       "input",
       (e) => {
-        if (Date.now() - this.composedAt < 50) {
+        const ie = e as InputEvent;
+        if (!ie.isComposing && ie.inputType === "insertText" && ie.data != null) {
           e.stopImmediatePropagation();
-          if (this.term.textarea) this.term.textarea.value = "";
+          this.deliverComposed(ie.data);
         }
       },
       true
@@ -209,16 +213,18 @@ export class TerminalView {
     }
   }
 
-  // Single source of truth for composed (dead-key/IME) text: forward the
-  // committed string to the PTY exactly once. The accompanying timestamp arms
-  // the `input` suppressor (see constructor) so xterm's own paths cannot also
-  // deliver it, and the textarea is cleared so nothing lingers to accumulate or
-  // feed xterm's deferred read on the next keystroke.
-  private handleCompositionEnd(event: CompositionEvent): void {
-    this.composedAt = Date.now();
+  // Single source of truth for composed (dead-key/IME) text. Always clear the
+  // helper textarea first: xterm only auto-clears it on Enter/Ctrl-C, so left
+  // alone it accumulates composed characters and xterm's deferred reads
+  // (scheduled at keydown) return the whole buffer. Then forward the committed
+  // string once — the per-commit guard collapses a compositionend and its
+  // trailing `input` event (or any other duplicate read) into a single write.
+  private deliverComposed(data: string | null): void {
     if (this.term.textarea) this.term.textarea.value = "";
-    const data = event.data;
-    if (data && this.generation) ptyWrite(this.generation, data).catch(() => {});
+    if (!data || this.composedDelivered) return;
+    this.composedDelivered = true;
+    this.imeLog(`deliver ${JSON.stringify(data)}`);
+    if (this.generation) ptyWrite(this.generation, data).catch(() => {});
   }
 
   private takePendingExit(): PtyExit | null {
