@@ -34,16 +34,33 @@ One xterm.js terminal per tab, wrapping at most one live PTY session.
   `pty_spawn`, stores the returned `generation`, replays buffered events.
 - Forwards keystrokes (`term.onData` → `pty_write`) and applies output
   (`pty://output` → decode base64 → `term.write`).
-- **Dead-key/IME input:** WebKitGTK (the Linux webview) drops composed
-  characters (ã, õ, ç, a lone `~`) from xterm's `onData`. A `compositionend`
-  listener on `term.textarea` re-sends the composed text, deduped against
-  xterm's own delivery so Chromium webviews (WebView2) never double-send.
+- **Dead-key/IME input:** on WebKit webviews (WebKitGTK on Linux) composed
+  input is handed to `CompositionCapture` (see `composition.ts`); xterm's own
+  composition path never runs there. Chromium webviews (WebView2) keep xterm's
+  stock path, gated by `needsCompositionCapture(navigator.userAgent)`.
 - Buffers `pty://output`/`pty://exit` events that arrive before `pty_spawn`
   returns (IPC ordering isn't guaranteed) and replays them once `generation` is
   set. Caps the buffer at 256 events.
 - Resize is debounced (50ms) and skipped when the pane is hidden
   (`offsetWidth === 0`) — fitting a `display:none` container collapses xterm.js.
 - `dispose()` kills the session, unlistens, disposes the terminal.
+
+### `composition.ts` — `CompositionCapture`
+Exclusive owner of dead-key/IME text on WebKit webviews. xterm's composition
+pipeline misreads its hidden helper `<textarea>` under WebKitGTK (the buffer is
+only cleared on Enter/Ctrl-C, so committed characters accumulate and get
+re-sent: `~`, `~~`, `~~~`, …). The module:
+- registers capture-phase listeners on an **ancestor** of the textarea — the
+  only way to run before xterm's own listeners (at the target element the DOM
+  fires listeners in registration order, and xterm registers first) — and
+  `stopPropagation()`s composition events, `input`, and IME-owned keydowns
+  (`isComposing` / keyCode 229) so xterm's broken path never runs;
+- drains the textarea **synchronously** on `compositionend` / non-composing
+  `input` (no timers → no latency, no reordering against keys xterm sends
+  directly), hands the text to a `commit` callback exactly once, and empties
+  the buffer so nothing accumulates.
+Ordinary keystrokes never reach it: xterm cancels their keydown/keypress before
+the browser inserts anything into the textarea.
 
 ### `wizard.ts` — `SetupWizard`
 Renders the three-step checklist (system / install / login), a status line, a
