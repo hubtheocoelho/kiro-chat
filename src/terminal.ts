@@ -18,6 +18,7 @@ import {
   type SpawnMode,
 } from "./ipc";
 import { xtermThemes, type ThemeName } from "./theme";
+import { CompositionCapture, needsCompositionCapture } from "./composition";
 
 export class TerminalView {
   readonly term: Terminal;
@@ -33,12 +34,7 @@ export class TerminalView {
   // so they are buffered while spawning and replayed after the assignment.
   private futureOutput: PtyOutput[] = [];
   private futureExit: PtyExit | null = null;
-  // xterm's composition path drops dead-key/IME input under WebKitGTK (the
-  // Linux webview): the composed character (ã, õ, ç, a lone ~) never reaches
-  // onData and is swallowed. We forward the composed text ourselves; this slot
-  // holds the in-flight string so the duplicate is suppressed on webviews
-  // (WebView2/Chromium) where xterm *does* deliver it through onData.
-  private pendingComposition: string | null = null;
+  private composition: CompositionCapture | null = null;
 
   constructor(private container: HTMLElement) {
     this.term = new Terminal({
@@ -61,17 +57,16 @@ export class TerminalView {
     this.fit.fit();
 
     this.term.onData((data) => {
-      // xterm delivered the composed text through its normal path — keep it,
-      // just clear the slot so handleCompositionEnd does not resend it.
-      if (data === this.pendingComposition) this.pendingComposition = null;
       if (this.generation) ptyWrite(this.generation, data).catch(() => {});
     });
-    // open() created the helper textarea; forward composed input from there so
-    // dead keys work on WebKitGTK. Capture would race xterm's own listener, so
-    // bind in the bubble phase (after xterm) to observe whether it sent first.
-    this.term.textarea?.addEventListener("compositionend", (e) =>
-      this.handleCompositionEnd(e)
-    );
+    // open() created the helper textarea; on WebKitGTK, hand dead-key/IME
+    // capture to CompositionCapture (see composition.ts for why xterm's own
+    // path duplicates composed characters there).
+    if (this.term.textarea && needsCompositionCapture(navigator.userAgent)) {
+      this.composition = new CompositionCapture(container, this.term.textarea, (data) => {
+        if (this.generation) ptyWrite(this.generation, data).catch(() => {});
+      });
+    }
     new ResizeObserver(() => this.scheduleResize()).observe(container);
 
     this.ready = Promise.all([
@@ -121,23 +116,6 @@ export class TerminalView {
     }
   }
 
-  // Forward dead-key/IME composed text that WebKitGTK never routes through
-  // xterm's onData. We optimistically assume xterm will deliver it: if its
-  // onData fires first (Chromium-based webviews) the slot is cleared and the
-  // deferred send is skipped; when xterm drops it the slot survives the macro
-  // task and we send it once. The defer is one tick (~0ms), so input stays
-  // fluid while no character is lost or duplicated.
-  private handleCompositionEnd(event: CompositionEvent): void {
-    const data = event.data;
-    if (!data) return;
-    this.pendingComposition = data;
-    window.setTimeout(() => {
-      if (this.pendingComposition !== data) return;
-      this.pendingComposition = null;
-      if (this.generation) ptyWrite(this.generation, data).catch(() => {});
-    }, 0);
-  }
-
   private takePendingExit(): PtyExit | null {
     const exit = this.futureExit;
     this.futureExit = null;
@@ -167,6 +145,8 @@ export class TerminalView {
       for (const unlisten of unlisteners) unlisten();
     });
     window.clearTimeout(this.resizeTimer);
+    this.composition?.dispose();
+    this.composition = null;
     this.term.dispose();
   }
 
